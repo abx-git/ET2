@@ -1,0 +1,146 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg: #f4f6f8;
+  --panel: rgba(244, 246, 248, 0.92);
+  --panel-solid: #f4f6f8;
+  --text: #1a2330;
+  --muted: #5c6b7a;
+  --accent: #0f766e;
+  --accent-2: #ca8a04;
+  --border: rgba(30, 40, 55, 0.14);
+  --control: #ffffff;
+  --control-hover: #eef1f4;
+  --radius: 12px;
+  --shadow: 0 10px 36px rgba(0, 0, 0, 0.12);
+  --canvas: #e8ecf1;
+}
+
+body {
+  @apply antialiased;
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+@layer utilities {
+  .dock-surface {
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  .dock-control {
+    background: var(--control);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .dock-control:hover {
+    background: var(--control-hover);
+  }
+
+  .dock-control-active {
+    background: color-mix(in srgb, var(--accent) 18%, var(--control));
+    border-color: var(--accent);
+    color: var(--text);
+  }
+
+  .group-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+
+  .dock-field {
+    width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--control);
+    padding: 0.4rem 0.55rem;
+    font-size: 0.82rem;
+    color: var(--text);
+    outline: none;
+  }
+
+  .dock-field:focus {
+    border-color: var(--accent);
+  }
+}
+
+/* MDXEditor im Notiz-Dialog: Toolbar und Inhalt an Dialog anpassen */
+.note-mdx-editor .mdxeditor {
+  --basePageBg: #ffffff;
+  border: none;
+  border-radius: 0.5rem;
+  font-family: inherit;
+}
+
+.note-mdx-editor .mdxeditor-toolbar {
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 0.5rem 0.5rem 0 0;
+  flex-wrap: wrap;
+}
+
+.note-mdx-editor .note-mdx-content {
+  font-family: inherit;
+}
+
+.note-mdx-editor .note-mdx-content h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0.5rem 0 0.35rem;
+}
+
+.note-mdx-editor .note-mdx-content h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0.45rem 0 0.3rem;
+}
+
+.note-mdx-editor .note-mdx-content h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.4rem 0 0.25rem;
+}
+
+.note-mdx-editor .note-mdx-content ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin: 0.35rem 0;
+}
+
+.note-mdx-editor .note-mdx-content ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+  margin: 0.35rem 0;
+}
+
+.note-mdx-editor .note-mdx-content blockquote {
+  border-left: 3px solid #94a3b8;
+  padding-left: 0.75rem;
+  color: #475569;
+  margin: 0.35rem 0;
+}
+
+.note-mdx-editor .note-mdx-content a {
+  color: #0369a1;
+  text-decoration: underline;
+}
+
+.note-mdx-editor .note-mdx-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  background: #f1f5f9;
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.3rem;
+}

@@ -1,0 +1,38 @@
+# Render Blueprint — LOX-Vault für T2 (abx-git)
+# App: https://abx-git.github.io/ET2/
+#
+# Deploy: https://dashboard.render.com → New → Blueprint → Repo abx-git/ET2
+#
+# Nach dem Deploy:
+#   1. Öffentliche URL notieren (z. B. https://t2-vault-abx-git.onrender.com)
+#   2. GitHub → Settings → Actions → Variables:
+#      NEXT_PUBLIC_ET2_VAULT_API_URL = <diese URL>
+#   3. main pushen oder Workflow „Deploy GitHub Pages“ manuell starten
+
+services:
+  - type: web
+    name: t2-vault-abx-git
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /api/vault/status
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOSTNAME
+        value: 0.0.0.0
+      - key: PORT
+        value: "3000"
+      - key: ET2_VAULT_ENABLED
+        value: "1"
+      - key: ET2_VAULT_DIR_PATH
+        value: ./data/vaults
+      - key: ET2_VAULT_CORS_ORIGINS
+        value: https://abx-git.github.io,http://localhost:3000
+    # Persistente Daten: plan auf „starter“ setzen und disk aktivieren (Free = flüchtig bei Redeploy)
+    # disk:
+    #   name: t2-vault-data
+    #   mountPath: /app/data
+    #   sizeGB: 1

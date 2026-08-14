@@ -1,0 +1,16 @@
+services:
+  t2:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      ET2_VAULT_ENABLED: ${ET2_VAULT_ENABLED:-1}
+      ET2_VAULT_DIR_PATH: ${ET2_VAULT_DIR_PATH:-./data/vaults}
+    volumes:
+      - t2-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  t2-data:
