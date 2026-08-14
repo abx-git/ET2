@@ -7,6 +7,7 @@ import { TaskConnectors } from "@/components/task-connectors";
 import { TaskDetailSidebar } from "@/components/task-detail-sidebar";
 import { contextChildren } from "@/lib/board-context";
 import { nodeMatchesBoardFilters } from "@/lib/board-filters";
+import { nodeHasCanvasPosition } from "@/lib/canvas-layout";
 import {
   DEFAULT_CANVAS_VIEWPORT,
   screenToWorld,
@@ -64,11 +65,16 @@ export function TaskCanvas() {
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const spaceDown = useRef(false);
 
+  const contextKids = useMemo(
+    () => contextChildren(roots, contextNodeId),
+    [roots, contextNodeId],
+  );
+  const needsCanvasLayout = contextKids.some((n) => !nodeHasCanvasPosition(n));
+
   useEffect(() => {
+    if (!needsCanvasLayout) return;
     ensureContextCanvasLayout();
-    // Nur bei Ebenenwechsel layouten — nicht bei jedem roots-Update (sonst Drag-Jank).
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
-  }, [contextNodeId, ensureContextCanvasLayout]);
+  }, [needsCanvasLayout, contextNodeId, ensureContextCanvasLayout]);
 
   const filterOpts = useMemo(
     () => ({
@@ -88,16 +94,14 @@ export function TaskCanvas() {
     filterScheduleKinds.length > 0;
 
   const nodes = useMemo(() => {
-    const children = contextChildren(roots, contextNodeId);
-    return children.filter((n) => {
+    return contextKids.filter((n) => {
       if (hideCompletedTasks && isTaskMarkedDone(n, completedTag)) return false;
       if (!filtersActive) return true;
       if (isNoteNode(n)) return filterExcludeTags.length === 0;
       return nodeMatchesBoardFilters(n, filterOpts);
     });
   }, [
-    roots,
-    contextNodeId,
+    contextKids,
     hideCompletedTasks,
     completedTag,
     filtersActive,

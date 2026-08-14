@@ -401,7 +401,10 @@ function expectTaskNodeJson(raw: unknown, path: string): TaskNodeJson {
   if (commandRaw !== undefined && typeof commandRaw !== "string") {
     throw new Error(`${path}.command: Zeichenkette erwartet`);
   }
-  if (typeof description !== "string") throw new Error(`${path}.description: Zeichenkette erwartet`);
+  if (description !== undefined && typeof description !== "string") {
+    throw new Error(`${path}.description: Zeichenkette erwartet`);
+  }
+  const descriptionText = typeof description === "string" ? description : "";
 
   let tags: string[];
   if (Array.isArray(tagsRaw)) {
@@ -420,9 +423,11 @@ function expectTaskNodeJson(raw: unknown, path: string): TaskNodeJson {
     tags = [];
   }
 
-  if (typeof effort !== "number" || !Number.isFinite(effort) || effort < 0) {
+  if (effort !== undefined && (typeof effort !== "number" || !Number.isFinite(effort) || effort < 0)) {
     throw new Error(`${path}.effort: nicht-negative Zahl erwartet`);
   }
+  const effortValue =
+    typeof effort === "number" && Number.isFinite(effort) && effort >= 0 ? effort : 0;
   const effortUnit = parseEffortUnit(effortUnitRaw);
   if (effortUnitRaw !== undefined && effortUnit === undefined) {
     throw new Error(`${path}.effortUnit: hours, minutes oder workdays erwartet`);
@@ -460,11 +465,11 @@ function expectTaskNodeJson(raw: unknown, path: string): TaskNodeJson {
     ...(typeof commandRaw === "string" && normalizeTaskCommand(commandRaw)
       ? { command: normalizeTaskCommand(commandRaw) }
       : {}),
-    description,
+    description: descriptionText,
     tags,
     dueDate: due,
     reminderDate: rem,
-    effort,
+    effort: effortValue,
     ...(effortUnit ? { effortUnit } : {}),
     ...(effortSource === "calculated" ? { effortSource } : {}),
     ...(cardColor ? { cardColor } : {}),
@@ -525,8 +530,8 @@ export function parseExportedDocument(text: string): ExportedDocumentV1 {
         scope: "board",
         roots,
         pathIds,
-        ...(collapsedIds.length ? { collapsedIds } : {}),
-        ...(cardCollapsedIds.length ? { cardCollapsedIds } : {}),
+        ...(Array.isArray(collapsedIdsRaw) ? { collapsedIds } : {}),
+        ...(Array.isArray(cardCollapsedIdsRaw) ? { cardCollapsedIds } : {}),
         ...(cardInteractionMode ? { cardInteractionMode } : {}),
         columnTitleOverrides: Object.fromEntries(
           Object.entries(columnTitleOverrides).map(([k, v]) => [String(k), v]),

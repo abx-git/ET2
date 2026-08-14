@@ -14,7 +14,7 @@ import {
   type BoardImportPayload,
   type BoardSnapshotV1,
 } from "@/lib/task-tree-json";
-import { getTemplatesSnapshot, mergeIncomingBoardTemplates } from "@/lib/templates";
+import { getTemplatesSnapshot, mergeIncomingBoardTemplates, seedTemplatesFromBoard } from "@/lib/templates";
 import { useTaskTreeStore, runWithoutBoardHistory } from "@/store/task-tree-store";
 
 export type FileConflictChoice = "load_file" | "keep_local";
@@ -67,6 +67,8 @@ export function applyBoardPayloadToStore(payload: BoardImportPayload): void {
     useTaskTreeStore.getState().replaceBoardFromImport(payload);
   });
   if (payload.templates?.length) {
+    // Sofort in den Cache, damit Persist-Key/Export zur Datei passen (kein Race mit IDB).
+    seedTemplatesFromBoard(payload.templates);
     void mergeIncomingBoardTemplates(payload.templates);
   }
 }

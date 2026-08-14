@@ -432,12 +432,26 @@ export function TaskBoard() {
         const hydrate = await hydrateStoreFromWorkingFile(handle);
         setWorkingFileName(handle.name?.trim() ? handle.name : "Arbeitsdatei");
         setWorkingFileSetupOpen(false);
+        if (hydrate.status === "read_error") {
+          window.alert(hydrate.message);
+          await detachWorkingFile();
+          setWorkingFileName(null);
+          return false;
+        }
         if (hydrate.status === "conflict") {
           const loadFile = window.confirm(
             "Die gewählte Datei konnte nicht gelesen werden oder weicht stark ab.\n\nOK = Dateiinhalt laden\nAbbrechen = Verknüpfung aufheben",
           );
           if (loadFile) {
-            applyBoardJsonToStore(hydrate.fileText);
+            const ok = applyBoardJsonToStore(hydrate.fileText);
+            if (!ok) {
+              window.alert(
+                "Die Datei ist keine gültige T2/ET2-Arbeitsdatei (JSON-Format „hierarchical-task-manager“, scope „board“).",
+              );
+              await detachWorkingFile();
+              setWorkingFileName(null);
+              return false;
+            }
             markWorkingFileSynced(hydrate.fileText, hydrate.fileLastModified);
             markWorkingFileSessionHydrated();
             endWorkingFileSwitch();
@@ -680,12 +694,24 @@ export function TaskBoard() {
           );
           return;
         }
+        if (result.hydrate.status === "read_error") {
+          window.alert(result.hydrate.message);
+          endWorkingFileSwitch({ keepPaused: true, pauseReason: "hydrate_error" });
+          return;
+        }
         if (result.hydrate.status === "conflict") {
           const loadFile = window.confirm(
             "Die gewählte Datei konnte nicht gelesen werden oder weicht stark ab.\n\nOK = Dateiinhalt laden\nAbbrechen = Abbrechen",
           );
           if (loadFile) {
-            applyBoardJsonToStore(result.hydrate.fileText);
+            const ok = applyBoardJsonToStore(result.hydrate.fileText);
+            if (!ok) {
+              window.alert(
+                "Die Datei ist keine gültige T2/ET2-Arbeitsdatei (JSON-Format „hierarchical-task-manager“, scope „board“).",
+              );
+              endWorkingFileSwitch({ keepPaused: true, pauseReason: "hydrate_error" });
+              return;
+            }
             markWorkingFileSynced(result.hydrate.fileText, result.hydrate.fileLastModified);
             markWorkingFileSessionHydrated();
             endWorkingFileSwitch();

@@ -33,6 +33,17 @@ export function ensureCanvasLayout(nodes: TaskNode[]): TaskNode[] {
   return changed ? out : nodes;
 }
 
+/** Layout für den gesamten Wald (jede Geschwisterebene), z. B. nach T2-Import. */
+export function ensureForestCanvasLayout(roots: TaskNode[]): TaskNode[] {
+  function walk(nodes: TaskNode[]): TaskNode[] {
+    const withChildren = nodes.map((n) =>
+      n.children.length === 0 ? n : { ...n, children: walk(n.children) },
+    );
+    return ensureCanvasLayout(withChildren);
+  }
+  return walk(roots);
+}
+
 /** Ersetzt Geschwister unter `parentId` (`null` = roots) durch `siblings`. */
 export function replaceSiblingsInForest(
   roots: TaskNode[],

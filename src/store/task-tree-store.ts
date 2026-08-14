@@ -1042,10 +1042,11 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     const state = get();
     if (!canConnectSiblings(state.roots, sourceId, targetId)) return null;
     const relType = type ?? state.defaultRelationType;
-    if (state.relations.some((r) => r.sourceId === sourceId && r.targetId === targetId)) {
+    if ((state.relations ?? []).some((r) => r.sourceId === sourceId && r.targetId === targetId)) {
       return null;
     }
-    const id = createRelationId(state.relations);
+    const existing = state.relations ?? [];
+    const id = createRelationId(existing);
     const relation: TaskRelation = {
       id,
       sourceId,
@@ -1053,7 +1054,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
       type: relType,
     };
     set({
-      relations: sanitizeRelations(state.roots, [...state.relations, relation]),
+      relations: sanitizeRelations(state.roots, [...existing, relation]),
       relationDraftSourceId: null,
       selectedRelationId: id,
     });
@@ -1062,14 +1063,14 @@ export const useTaskTreeStore = create<TaskTreeState>()(
 
   disconnectRelation: (relationId) => {
     set((s) => ({
-      relations: s.relations.filter((r) => r.id !== relationId),
+      relations: (s.relations ?? []).filter((r) => r.id !== relationId),
       selectedRelationId: s.selectedRelationId === relationId ? null : s.selectedRelationId,
     }));
   },
 
   updateRelation: (relationId, patch) => {
     set((s) => ({
-      relations: s.relations.map((r) =>
+      relations: (s.relations ?? []).map((r) =>
         r.id === relationId
           ? {
               ...r,

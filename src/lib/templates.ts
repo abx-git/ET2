@@ -151,7 +151,8 @@ export function parseTemplatesArray(raw: unknown): TemplateRecord[] {
 
 export async function hydrateTemplatesFromIdb(): Promise<TemplateRecord[]> {
   const entries = await idbGetAll();
-  setCache(entries.sort(sortByUpdatedDesc));
+  // Board-Import kann Templates schon in den Cache gelegt haben — nicht überschreiben.
+  setCache(mergeTemplateLibraries(entries, cache));
   hydrated = true;
   return cache;
 }
@@ -295,6 +296,13 @@ export async function clearTemplatesForTests(): Promise<void> {
   } catch {
     /* ignore */
   }
+}
+
+/** Board-Templates sofort in den In-Memory-Cache (vor async IDB). */
+export function seedTemplatesFromBoard(incoming: TemplateRecord[] | undefined | null): void {
+  if (!incoming?.length) return;
+  setCache(mergeTemplateLibraries(cache, incoming));
+  void persistCache();
 }
 
 /** @internal test helper */

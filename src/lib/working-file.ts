@@ -821,7 +821,7 @@ async function ensureReadWritePermission(handle: FileSystemFileHandle): Promise<
  */
 const JSON_PICKER_TYPES: FilePickerAcceptType[] = [
   {
-    description: "ET2 Board JSON",
+    description: "T2/ET2 Board JSON",
     accept: {
       "application/json": [".json"],
       "text/json": [".json"],
@@ -971,14 +971,18 @@ function hydrateOpenedFile(fileJson: string, fileLastModified: number): HydrateW
 
   if (!boardImportPayloadFromExportText(trimmed)) {
     return {
-      status: "conflict",
-      fileText: fileJson,
-      fileLastModified,
+      status: "read_error",
+      message:
+        'Die Datei ist keine gültige T2/ET2-Arbeitsdatei (JSON-Format „hierarchical-task-manager“, scope „board“ erwartet).',
     };
   }
 
   if (!loadBoardFromJsonText(trimmed)) {
-    return { status: "conflict", fileText: fileJson, fileLastModified };
+    return {
+      status: "read_error",
+      message:
+        'Die Datei konnte nicht geladen werden (ungültiges T2/ET2-Board-JSON).',
+    };
   }
   markWorkingFileSynced(fileJson, fileLastModified);
   return { status: "loaded" };
@@ -1000,7 +1004,8 @@ async function rememberMobileCopy(json: string, fileName: string, sourceLastModi
 
 export type HydrateWorkingFileResult =
   | { status: "loaded" | "empty" | "pushed_local" }
-  | { status: "conflict"; fileText: string; fileLastModified: number };
+  | { status: "conflict"; fileText: string; fileLastModified: number }
+  | { status: "read_error"; message: string };
 
 export type BrowserFileAttachResult =
   | HydrateWorkingFileResult
@@ -1128,7 +1133,7 @@ async function attachWorkingFileFromText(
     return {
       status: "read_error",
       message:
-        'Die Datei ist keine gültige ET2-Arbeitsdatei (JSON-Format „hierarchical-task-manager“ erwartet).',
+        'Die Datei ist keine gültige T2/ET2-Arbeitsdatei (JSON-Format „hierarchical-task-manager“, scope „board“ erwartet).',
     };
   }
 
@@ -1241,6 +1246,11 @@ export async function hydrateStoreFromWorkingFile(
     if (result.status === "conflict") {
       // Keep switch gate up — caller must not autosave previous board into this file.
       // User resolves via dialog; load_file ends switch, keep_local should Speichern unter.
+      return result;
+    }
+
+    if (result.status === "read_error") {
+      endWorkingFileSwitch({ keepPaused: true, pauseReason: "hydrate_error" });
       return result;
     }
 
