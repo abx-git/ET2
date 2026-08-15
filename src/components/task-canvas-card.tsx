@@ -2,14 +2,31 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
+import { NoteMarkdownContent } from "@/components/note-markdown-content";
 import { cardColorAccentClass, cardColorClass } from "@/lib/card-color";
+import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
 import { taskCardRect } from "@/lib/connector-geometry";
-import { isTaskMarkedDone } from "@/lib/task-tags";
 import { taskLinkHref } from "@/lib/task-link";
+import { isTaskMarkedDone } from "@/lib/task-tags";
 import { isNoteNode } from "@/lib/tree-node-kind";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import type { TaskNode } from "@/types/task-node";
-import { NoteMarkdownContent } from "@/components/note-markdown-content";
+
+const MIN_WIDTH = 100;
+const MIN_HEIGHT = 60;
+
+type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+const HANDLE_POSITIONS: Record<ResizeHandle, string> = {
+  n: "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize",
+  s: "left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-ns-resize",
+  e: "right-0 top-1/2 translate-x-1/2 -translate-y-1/2 cursor-ew-resize",
+  w: "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize",
+  ne: "right-0 top-0 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize",
+  nw: "left-0 top-0 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize",
+  se: "right-0 bottom-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize",
+  sw: "left-0 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize",
+};
 
 export interface TaskCanvasCardProps {
   node: TaskNode;
@@ -21,7 +38,7 @@ export interface TaskCanvasCardProps {
   onSelect: (shiftKey?: boolean) => void;
   onDrill: () => void;
   onMove: (x: number, y: number, delta?: { dx: number; dy: number }) => void;
-  onResize: (width: number, height: number) => void;
+  onResize: (patch: { x: number; y: number; width: number; height: number }) => void;
   onRotate: (rotation: number) => void;
   onConnectHandle: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
@@ -55,9 +72,14 @@ export function TaskCanvasCard({
   const [editing, setEditing] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [draft, setDraft] = useState(node.title);
+  const [coarsePointer, setCoarsePointer] = useState(false);
   const updateCard = useTaskTreeStore((s) => s.updateCard);
   const note = isNoteNode(node);
   const done = !note && isTaskMarkedDone(node, completedTag);
+
+  useEffect(() => {
+    setCoarsePointer(isCoarsePointerDevice());
+  }, []);
 
   const colorClass = note
     ? "bg-yellow-50 border-yellow-200/80"
@@ -126,20 +148,34 @@ export function TaskCanvasCard({
 
   const ROTATION_SNAP = 15;
 
-  /** E2-style global resize with corner handles. */
-  const startResize = (e: React.PointerEvent, handle: string) => {
+  /** E2-style resize: 8 handles, opposite edge/corner stays anchored. */
+  const startResize = (handle: ResizeHandle, e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
     const startX = e.clientX;
     const startY = e.clientY;
-    const orig = { w: rect.w, h: rect.h };
+    const orig = { x: rect.x, y: rect.y, width: rect.w, height: rect.h };
     const onMoveEv = (ev: PointerEvent) => {
       const dx = (ev.clientX - startX) / zoom;
       const dy = (ev.clientY - startY) / zoom;
-      let w = orig.w, h = orig.h;
-      if (handle === "se") { w = Math.max(100, orig.w + dx); h = Math.max(60, orig.h + dy); }
-      else if (handle === "ne") { w = Math.max(100, orig.w + dx); h = Math.max(60, orig.h - dy); }
-      else if (handle === "sw") { w = Math.max(100, orig.w - dx); h = Math.max(60, orig.h + dy); }
-      else if (handle === "nw") { w = Math.max(100, orig.w - dx); h = Math.max(60, orig.h - dy); }
-      onResize(w, h);
+      let x = orig.x;
+      let y = orig.y;
+      let width = orig.width;
+      let height = orig.height;
+      if (handle.includes("e")) width = Math.max(MIN_WIDTH, orig.width + dx);
+      if (handle.includes("s")) height = Math.max(MIN_HEIGHT, orig.height + dy);
+      if (handle.includes("w")) {
+        const nextWidth = Math.max(MIN_WIDTH, orig.width - dx);
+        x = orig.x + (orig.width - nextWidth);
+        width = nextWidth;
+      }
+      if (handle.includes("n")) {
+        const nextHeight = Math.max(MIN_HEIGHT, orig.height - dy);
+        y = orig.y + (orig.height - nextHeight);
+        height = nextHeight;
+      }
+      onResize({ x, y, width, height });
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMoveEv);
@@ -376,19 +412,21 @@ export function TaskCanvasCard({
         </svg>
       </div>
 
-      {/* Resize handles — all 4 corners, E2-style (only single-select) */}
-      {selected && !multiSelected && !editing && (
-        <>
-          <div className="absolute -bottom-1.5 -right-1.5 z-20 h-3 w-3 cursor-nwse-resize rounded-sm border border-sky-600 bg-white shadow-sm"
-            onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); e.preventDefault(); startResize(e, "se"); }} />
-          <div className="absolute -bottom-1.5 -left-1.5 z-20 h-3 w-3 cursor-nesw-resize rounded-sm border border-sky-600 bg-white shadow-sm"
-            onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); e.preventDefault(); startResize(e, "sw"); }} />
-          <div className="absolute -top-1.5 -right-1.5 z-20 h-3 w-3 cursor-nesw-resize rounded-sm border border-sky-600 bg-white shadow-sm"
-            onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); e.preventDefault(); startResize(e, "ne"); }} />
-          <div className="absolute -top-1.5 -left-1.5 z-20 h-3 w-3 cursor-nwse-resize rounded-sm border border-sky-600 bg-white shadow-sm"
-            onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); e.preventDefault(); startResize(e, "nw"); }} />
-        </>
-      )}
+      {/* Resize handles — E2-style 8 handles (only single-select) */}
+      {selected && !multiSelected && !editing &&
+        (Object.keys(HANDLE_POSITIONS) as ResizeHandle[]).map((handle) => (
+          <button
+            key={handle}
+            type="button"
+            aria-label={`Größe ändern (${handle})`}
+            className={[
+              "absolute z-20 rounded-sm border border-sky-600 bg-white shadow-sm",
+              coarsePointer ? "h-4 w-4" : "h-2.5 w-2.5",
+              HANDLE_POSITIONS[handle],
+            ].join(" ")}
+            onPointerDown={(e) => startResize(handle, e)}
+          />
+        ))}
 
       {/* Rotation handle — top-center, E2-style with Shift=15° snap */}
       {selected && !multiSelected && !editing && (

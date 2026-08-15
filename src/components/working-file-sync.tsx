@@ -111,9 +111,14 @@ export function WorkingFileSync({
   const mountedRef = useRef(true);
   const saveQueuedRef = useRef(false);
   const saveInFlightRef = useRef(false);
+  /** True when board changed while a write was in flight — flush again after. */
+  const persistAgainRef = useRef(false);
   const suspendAutoPersistRef = useRef(false);
   const conflictActiveRef = useRef(false);
   const lastPersistKeyRef = useRef<string | null>(null);
+  const persistDebounceTimerRef = useRef<number | null>(null);
+
+  const AUTOSAVE_DEBOUNCE_MS = 250;
 
   const syncFileLabel = () => {
     callbacksRef.current.onWorkingFileNameChange(getWorkingFileLabel());
@@ -189,25 +194,31 @@ export function WorkingFileSync({
         isWorkingFilePersistPaused() ||
         isWorkingFileSwitchInProgress() ||
         !isWorkingFileWriterLeader() ||
-        saveInFlightRef.current ||
         conflictActiveRef.current ||
         suspendAutoPersistRef.current
       ) {
         return false;
       }
+      if (saveInFlightRef.current) {
+        persistAgainRef.current = true;
+        return false;
+      }
       if (!isWorkingFileDirty()) {
+        persistAgainRef.current = false;
         syncDirty();
         return true;
       }
 
       saveInFlightRef.current = true;
       callbacksRef.current.onSavingChange?.(true);
+      let wroteOk = false;
       try {
         const result = await persistWorkingFileJson(boardJsonFromStoreState());
         if (!mountedRef.current) return false;
         if (result.ok) {
           lastPersistKeyRef.current = boardPersistKeyFromStoreState();
           syncDirty();
+          wroteOk = true;
           return true;
         }
         if (
@@ -222,6 +233,7 @@ export function WorkingFileSync({
           if (retryResult.ok) {
             lastPersistKeyRef.current = boardPersistKeyFromStoreState();
             syncDirty();
+            wroteOk = true;
             return true;
           }
           // If retry also fails, mark dirty but do NOT overwrite the editor state.
@@ -233,6 +245,14 @@ export function WorkingFileSync({
       } finally {
         saveInFlightRef.current = false;
         if (mountedRef.current) callbacksRef.current.onSavingChange?.(false);
+        // Edits during the write (or a queued "again") must not stay unsaved.
+        if (
+          mountedRef.current &&
+          (persistAgainRef.current || (wroteOk && isWorkingFileDirty()))
+        ) {
+          persistAgainRef.current = false;
+          schedulePersistOnChange();
+        }
       }
     };
 
@@ -247,12 +267,20 @@ export function WorkingFileSync({
       ) {
         return;
       }
-      if (saveQueuedRef.current) return;
+      if (saveInFlightRef.current) {
+        persistAgainRef.current = true;
+        return;
+      }
+      if (persistDebounceTimerRef.current != null) {
+        window.clearTimeout(persistDebounceTimerRef.current);
+        persistDebounceTimerRef.current = null;
+      }
       saveQueuedRef.current = true;
-      queueMicrotask(() => {
+      persistDebounceTimerRef.current = window.setTimeout(() => {
+        persistDebounceTimerRef.current = null;
         saveQueuedRef.current = false;
         void flushPersist();
-      });
+      }, AUTOSAVE_DEBOUNCE_MS);
     };
 
     const onPersistedBoardChanged = () => {
@@ -263,7 +291,8 @@ export function WorkingFileSync({
       }
       const key = boardPersistKeyFromStoreState();
       if (key === lastPersistKeyRef.current) return;
-      lastPersistKeyRef.current = key;
+      // Do not mark the key as "handled" until a successful write — otherwise a
+      // skipped/failed flush leaves the board permanently "ungespeichert".
       syncDirty();
       schedulePersistOnChange();
     };
@@ -448,6 +477,10 @@ export function WorkingFileSync({
     return () => {
       mountedRef.current = false;
       if (pollId != null) window.clearInterval(pollId);
+      if (persistDebounceTimerRef.current != null) {
+        window.clearTimeout(persistDebounceTimerRef.current);
+        persistDebounceTimerRef.current = null;
+      }
       storeUnsub?.();
       roleUnsub?.();
       stopWorkingFileWriter();

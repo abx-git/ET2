@@ -339,8 +339,11 @@ export interface TaskTreeState {
   ensureContextCanvasLayout: (pane?: BoardPaneId) => void;
   /** Karte auf dem Canvas verschieben. */
   moveCanvasNode: (nodeId: string, x: number, y: number) => void;
-  /** Kartengröße ändern. */
-  resizeCanvasNode: (nodeId: string, width: number, height: number) => void;
+  /** Kartengröße ändern (E2-Style: inkl. x/y bei Ankern an gegenüberliegender Kante). */
+  resizeCanvasNode: (
+    nodeId: string,
+    patch: { x: number; y: number; width: number; height: number },
+  ) => void;
   /** Karte rotieren (Grad). */
   rotateCanvasNode: (nodeId: string, rotation: number) => void;
   connectTasks: (sourceId: string, targetId: string, type?: TaskRelationType) => string | null;
@@ -1109,11 +1112,13 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     });
   },
 
-  resizeCanvasNode: (nodeId, width, height) => {
+  resizeCanvasNode: (nodeId, patch) => {
     set((s) => {
       const nextRoots = updateNodeFields(s.roots, nodeId, {
-        width: Math.max(100, Math.round(width)),
-        height: Math.max(60, Math.round(height)),
+        x: Math.round(patch.x),
+        y: Math.round(patch.y),
+        width: Math.max(100, Math.round(patch.width)),
+        height: Math.max(60, Math.round(patch.height)),
       });
       return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
     });

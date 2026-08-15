@@ -526,7 +526,7 @@ export function TaskRow({
             <button
               type="button"
               className={[
-                "w-full truncate rounded-sm text-left text-sm font-medium hover:underline decoration-slate-300 underline-offset-2",
+                "max-w-full w-fit cursor-text truncate rounded-sm text-left text-sm font-medium hover:underline decoration-slate-300 underline-offset-2",
                 done ? "text-slate-400 line-through" : "text-slate-900",
               ].join(" ")}
               onPointerDown={(e) => e.stopPropagation()}

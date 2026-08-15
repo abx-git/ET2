@@ -597,7 +597,7 @@ export function TaskCanvas() {
               onSelect={(shiftKey) => handleCardSelect(node.id, shiftKey ?? false)}
               onDrill={() => drillIntoNode(node.id)}
               onMove={(x, y, delta) => handleCardMove(node.id, x, y, delta)}
-              onResize={(w, h) => resizeCanvasNode(node.id, w, h)}
+              onResize={(patch) => resizeCanvasNode(node.id, patch)}
               onRotate={(r) => rotateCanvasNode(node.id, r)}
               onConnectHandle={() => handleCardConnect(node.id)}
               onContextMenu={(e) => {

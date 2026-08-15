@@ -92,26 +92,31 @@ function OutlineRow({
         setDropRef(el);
       }}
       className={[
-        "group flex touch-none cursor-grab items-center gap-0.5 rounded-md px-0.5 py-0.5 text-left text-[13px] leading-snug active:cursor-grabbing",
-        selected ? "bg-sky-100/90 text-sky-950 font-medium" : "text-slate-900 hover:bg-white",
+        "group flex touch-none cursor-grab items-center gap-0.5 rounded-md px-0.5 py-0.5 text-left text-[13px] leading-snug text-[var(--text)] active:cursor-grabbing",
+        selected
+          ? "bg-[var(--control-hover)] font-medium ring-1 ring-[var(--border)]"
+          : "hover:bg-[var(--control)]",
         isDragging ? "opacity-40" : "",
         isNestTarget || isOver
           ? isNoteNode(node)
             ? accent.outlineNest
-            : "bg-violet-50 ring-1 ring-violet-300"
+            : "bg-violet-500/20 ring-1 ring-violet-400/60"
           : "",
       ].join(" ")}
       style={{ paddingLeft: `${4 + depth * 12}px` }}
       {...attributes}
       {...listeners}
     >
-      <span className="flex h-5 w-3.5 shrink-0 items-center justify-center text-slate-300" aria-hidden>
+      <span
+        className="flex h-5 w-3.5 shrink-0 items-center justify-center text-[var(--muted)] opacity-70"
+        aria-hidden
+      >
         <GripVertical className="h-3 w-3" />
       </span>
       {hasChildren ? (
         <button
           type="button"
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 hover:text-slate-700"
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[var(--muted)] hover:text-[var(--text)]"
           aria-label={collapsed ? "Aufklappen" : "Zuklappen"}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -132,7 +137,7 @@ function OutlineRow({
         type="button"
         className={[
           "min-w-0 flex-1 truncate py-0.5 text-left",
-          done ? "text-slate-500 line-through" : "",
+          done ? "text-[var(--muted)] line-through" : "",
         ].join(" ")}
         title={nodeDisplayTitle(node)}
         onPointerDown={(e) => e.stopPropagation()}
@@ -217,7 +222,7 @@ export function OutlineRail({
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
         {rows.length === 0 ? (
-          <p className="px-2 py-4 text-xs text-slate-500">Noch keine Karten.</p>
+          <p className="px-2 py-4 text-xs text-[var(--muted)]">Noch keine Karten.</p>
         ) : (
           <ul className="space-y-0">
             {rows.map((row) => {
@@ -261,7 +266,7 @@ export function OutlineRail({
           </ul>
         )}
         {hideCompletedTasks ? (
-          <p className="px-2 pb-2 pt-1 text-[10px] text-slate-400">
+          <p className="px-2 pb-2 pt-1 text-[10px] text-[var(--muted)]">
             Erledigte sind in der Liste ausgeblendet, in der Struktur weiterhin sichtbar.
           </p>
         ) : null}
