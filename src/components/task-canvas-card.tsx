@@ -3,11 +3,22 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { NoteMarkdownContent } from "@/components/note-markdown-content";
+import {
+  aggregateNextDueOpen,
+  aggregateOverdueDue,
+  formatDueHint,
+  isDueOverdue,
+} from "@/lib/aggregates";
 import { cardColorAccentClass, cardColorClass } from "@/lib/card-color";
 import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
 import { taskCardRect } from "@/lib/connector-geometry";
+import {
+  effortTotalsIsEmpty,
+  formatEffortTotals,
+  rollupDisplayTotals,
+} from "@/lib/task-effort";
 import { taskLinkHref } from "@/lib/task-link";
-import { isTaskMarkedDone } from "@/lib/task-tags";
+import { isTaskMarkedDone, tagsWithoutCompletedTag } from "@/lib/task-tags";
 import { isNoteNode } from "@/lib/tree-node-kind";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import type { TaskNode } from "@/types/task-node";
@@ -104,12 +115,34 @@ export function TaskCanvasCard({
   const [draft, setDraft] = useState(node.title);
   const [coarsePointer, setCoarsePointer] = useState(false);
   const updateCard = useTaskTreeStore((s) => s.updateCard);
+  const effortOnTasksEnabled = useTaskTreeStore((s) => s.effortOnTasksEnabled);
+  const fieldVisibility = useTaskTreeStore((s) => s.cardFieldVisibility);
   const note = isNoteNode(node);
   const done = !note && isTaskMarkedDone(node, completedTag);
 
   useEffect(() => {
     setCoarsePointer(isCoarsePointerDevice());
   }, []);
+
+  const rollupDue = !note ? aggregateNextDueOpen(node, completedTag) : null;
+  const rollupOverdue = !note ? aggregateOverdueDue(node, completedTag) : null;
+  const dueHint =
+    !note && fieldVisibility.dueDate ? formatDueHint(rollupOverdue ?? rollupDue) : null;
+  const reminderHint =
+    !note && fieldVisibility.reminderDate ? formatDueHint(node.reminderDate) : null;
+  const effortTotals =
+    !note && fieldVisibility.effort && effortOnTasksEnabled
+      ? rollupDisplayTotals(node, completedTag)
+      : null;
+  const effortLabel =
+    effortTotals && !effortTotalsIsEmpty(effortTotals)
+      ? formatEffortTotals(effortTotals)
+      : "";
+  const overdue = !note && isDueOverdue(rollupOverdue ?? null, done);
+  const allVisibleTags =
+    !note && fieldVisibility.tags ? tagsWithoutCompletedTag(node.tags, completedTag) : [];
+  const visibleTags = allVisibleTags.slice(0, 4);
+  const showScheduleMeta = Boolean(dueHint || reminderHint || effortLabel);
 
   const colorClass = note
     ? "bg-yellow-50 border-yellow-200/80"
@@ -262,6 +295,7 @@ export function TaskCanvasCard({
         connectSource ? "ring-2 ring-amber-400 shadow-xl" : "",
         nestTarget ? "ring-2 ring-violet-500 ring-offset-2 shadow-xl shadow-violet-500/30 scale-[1.02]" : "",
         done ? "opacity-50 saturate-50" : "",
+        overdue ? "border-red-300/90" : "",
         dimmed ? "opacity-25" : "",
       ]
         .filter(Boolean)
@@ -413,7 +447,7 @@ export function TaskCanvasCard({
         )}
 
         {/* Description */}
-        {!note && node.description.trim() ? (
+        {!note && fieldVisibility.description && node.description.trim() ? (
           <div className="min-h-0 flex-1 overflow-hidden">
             <p className="text-[11px] leading-relaxed text-slate-500 overflow-hidden" style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: "unset" }}>{node.description}</p>
           </div>
@@ -428,10 +462,40 @@ export function TaskCanvasCard({
           <p className="text-[11px] italic text-slate-400">Leere Notiz</p>
         ) : null}
 
+        {/* Due / reminder / effort (incl. rolled-up Σ) */}
+        {showScheduleMeta ? (
+          <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 pt-0.5">
+            {dueHint ? (
+              <span
+                className={[
+                  "text-[10px] tabular-nums",
+                  overdue ? "font-semibold text-red-600" : "text-slate-500",
+                ].join(" ")}
+                title="Fälligkeit (inkl. Unterkarten)"
+              >
+                {dueHint}
+              </span>
+            ) : null}
+            {reminderHint ? (
+              <span className="text-[10px] tabular-nums text-amber-700/90" title="Erinnerung">
+                Erin. {reminderHint}
+              </span>
+            ) : null}
+            {effortLabel ? (
+              <span
+                className="text-[10px] tabular-nums text-slate-600"
+                title="Aufwand inkl. Summe der Unterkarten"
+              >
+                Σ {effortLabel}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         {/* Tags */}
-        {!note && node.tags.length > 0 ? (
-          <div className="mt-auto flex flex-wrap gap-1 pt-0.5">
-            {node.tags.slice(0, 4).map((tag) => (
+        {visibleTags.length > 0 ? (
+          <div className={[showScheduleMeta ? "pt-0.5" : "mt-auto pt-0.5", "flex flex-wrap gap-1"].join(" ")}>
+            {visibleTags.map((tag) => (
               <span
                 key={tag}
                 className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
@@ -439,11 +503,11 @@ export function TaskCanvasCard({
                 {tag}
               </span>
             ))}
-            {node.tags.length > 4 && (
+            {allVisibleTags.length > 4 ? (
               <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400">
-                +{node.tags.length - 4}
+                +{allVisibleTags.length - 4}
               </span>
-            )}
+            ) : null}
           </div>
         ) : null}
       </div>
