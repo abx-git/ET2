@@ -86,6 +86,7 @@ import {
   snapToGrid,
   type CanvasViewport,
 } from "@/lib/canvas-viewport";
+import type { CanvasGroup } from "@/lib/canvas-group";
 import {
   DEFAULT_APPEARANCE,
   normalizeAppearance,
@@ -136,7 +137,7 @@ function partializeBoardHistory(state: TaskTreeState): BoardHistorySlice {
     effortOnTasksEnabled: state.effortOnTasksEnabled,
     noteAccentColor: state.noteAccentColor,
     columnTitleOverrides: state.columnTitleOverrides,
-    relations: state.relations ?? [],
+    relations: state.relations,
     appearance: state.appearance,
   };
 }
@@ -309,6 +310,11 @@ export interface TaskTreeState {
   /** Canvas-Viewport (nicht persistiert). */
   canvasViewport: CanvasViewport;
   setCanvasViewport: (viewport: CanvasViewport) => void;
+  /** Gruppierungs-Boxen im Canvas, pro Kontext-Ebene (key = contextNodeId ?? "__root__"). */
+  canvasGroups: Record<string, CanvasGroup[]>;
+  addCanvasGroup: (group: CanvasGroup) => void;
+  updateCanvasGroup: (id: string, patch: Partial<Omit<CanvasGroup, "id">>) => void;
+  removeCanvasGroup: (id: string) => void;
   /** Connect-Modus: nächster Klick wählt Quelle/Ziel. */
   relationConnectMode: boolean;
   setRelationConnectMode: (on: boolean) => void;
@@ -319,6 +325,12 @@ export interface TaskTreeState {
   /** Ausgewählte Canvas-Karte (Details-Leiste). */
   selectedCanvasNodeId: string | null;
   setSelectedCanvasNodeId: (id: string | null) => void;
+  /** Multi-Select: alle ausgewählten Canvas-Karten (für gemeinsames Verschieben/Clipboard). */
+  selectedCanvasNodeIds: string[];
+  toggleCanvasNodeSelected: (id: string) => void;
+  clearCanvasMultiSelect: () => void;
+  /** Verschiebe alle multi-selected Karten um ein Delta. */
+  moveCanvasNodesBy: (dx: number, dy: number) => void;
   /** Default-Typ für neue Verbindungen. */
   defaultRelationType: TaskRelationType;
   setDefaultRelationType: (type: TaskRelationType) => void;
@@ -327,6 +339,10 @@ export interface TaskTreeState {
   ensureContextCanvasLayout: (pane?: BoardPaneId) => void;
   /** Karte auf dem Canvas verschieben. */
   moveCanvasNode: (nodeId: string, x: number, y: number) => void;
+  /** Kartengröße ändern. */
+  resizeCanvasNode: (nodeId: string, width: number, height: number) => void;
+  /** Karte rotieren (Grad). */
+  rotateCanvasNode: (nodeId: string, rotation: number) => void;
   connectTasks: (sourceId: string, targetId: string, type?: TaskRelationType) => string | null;
   disconnectRelation: (relationId: string) => void;
   updateRelation: (relationId: string, patch: Partial<Pick<TaskRelation, "type" | "label">>) => void;
@@ -345,6 +361,8 @@ export interface TaskTreeState {
   convertCardToNote: (nodeId: string) => void;
   /** Entfernt die Karte inkl. gesamtem Unterbaum. */
   removeCard: (nodeId: string) => void;
+  /** Karte(n) in die Zwischenablage verschieben. */
+  moveNodesToClipboard: (nodeIds: string[]) => void;
 
   /** Gesamten Board-Zustand aus Import ersetzen (Karten, Pfad, Ebenen-Namen, Einstellungen). */
   replaceBoardFromImport: (payload: {
@@ -492,10 +510,12 @@ export const useTaskTreeStore = create<TaskTreeState>()(
   appearance: { ...DEFAULT_APPEARANCE },
   boardViewMode: "list",
   canvasViewport: { ...DEFAULT_CANVAS_VIEWPORT },
+  canvasGroups: {} as Record<string, CanvasGroup[]>,
   relationConnectMode: false,
   relationDraftSourceId: null,
   selectedRelationId: null,
   selectedCanvasNodeId: null,
+  selectedCanvasNodeIds: [] as string[],
   defaultRelationType: "temporal",
   pathIds: [],
   collapsedIds: [],
@@ -818,6 +838,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
         contextChanged && targetPane === s.activePane
           ? {
               selectedCanvasNodeId: null as string | null,
+              selectedCanvasNodeIds: [] as string[],
               selectedRelationId: null as string | null,
               relationDraftSourceId: null as string | null,
             }
@@ -850,7 +871,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
 
   drillIntoNode: (nodeId, pane) => {
     get().setContextNodeId(nodeId, pane);
-    set({ selectedCanvasNodeId: null, selectedRelationId: null, relationDraftSourceId: null });
+    set({ selectedCanvasNodeId: null, selectedCanvasNodeIds: [] as string[], selectedRelationId: null, relationDraftSourceId: null });
   },
 
   drillUp: (pane) => {
@@ -984,6 +1005,27 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     set({ canvasViewport: viewport });
   },
 
+  addCanvasGroup: (group) => {
+    const key = get().contextNodeId ?? "__root__";
+    const prev = get().canvasGroups;
+    const list = prev[key] ?? [];
+    set({ canvasGroups: { ...prev, [key]: [...list, group] } });
+  },
+
+  updateCanvasGroup: (id, patch) => {
+    const key = get().contextNodeId ?? "__root__";
+    const prev = get().canvasGroups;
+    const list = prev[key] ?? [];
+    set({ canvasGroups: { ...prev, [key]: list.map((g) => g.id === id ? { ...g, ...patch } : g) } });
+  },
+
+  removeCanvasGroup: (id) => {
+    const key = get().contextNodeId ?? "__root__";
+    const prev = get().canvasGroups;
+    const list = prev[key] ?? [];
+    set({ canvasGroups: { ...prev, [key]: list.filter((g) => g.id !== id) } });
+  },
+
   setRelationConnectMode: (on) => {
     set({
       relationConnectMode: on,
@@ -1005,8 +1047,37 @@ export const useTaskTreeStore = create<TaskTreeState>()(
   setSelectedCanvasNodeId: (id) => {
     set({
       selectedCanvasNodeId: id,
+      selectedCanvasNodeIds: [] as string[],
       ...(id ? { selectedRelationId: null } : {}),
     });
+  },
+
+  toggleCanvasNodeSelected: (id) => {
+    const prev = get().selectedCanvasNodeIds;
+    const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+    set({ selectedCanvasNodeIds: next, selectedCanvasNodeId: next.length === 1 ? next[0]! : null });
+  },
+
+  clearCanvasMultiSelect: () => {
+    set({ selectedCanvasNodeIds: [] });
+  },
+
+  moveCanvasNodesBy: (dx, dy) => {
+    const { roots, selectedCanvasNodeIds } = get();
+    if (selectedCanvasNodeIds.length === 0) return;
+    const idSet = new Set(selectedCanvasNodeIds);
+    const nextRoots = structuredClone(roots);
+    const moveNode = (forest: TaskNode[]) => {
+      for (const n of forest) {
+        if (idSet.has(n.id)) {
+          n.x = (n.x ?? 0) + dx;
+          n.y = (n.y ?? 0) + dy;
+        }
+        if (n.children.length > 0) moveNode(n.children);
+      }
+    };
+    moveNode(nextRoots);
+    set({ roots: nextRoots });
   },
 
   setDefaultRelationType: (type) => {
@@ -1033,6 +1104,25 @@ export const useTaskTreeStore = create<TaskTreeState>()(
       const nextRoots = updateNodeFields(s.roots, nodeId, {
         x: snapToGrid(x),
         y: snapToGrid(y),
+      });
+      return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
+    });
+  },
+
+  resizeCanvasNode: (nodeId, width, height) => {
+    set((s) => {
+      const nextRoots = updateNodeFields(s.roots, nodeId, {
+        width: Math.max(100, Math.round(width)),
+        height: Math.max(60, Math.round(height)),
+      });
+      return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
+    });
+  },
+
+  rotateCanvasNode: (nodeId, rotation) => {
+    set((s) => {
+      const nextRoots = updateNodeFields(s.roots, nodeId, {
+        rotation: Math.round(rotation * 10) / 10,
       });
       return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
     });
@@ -1173,6 +1263,27 @@ export const useTaskTreeStore = create<TaskTreeState>()(
           ? null
           : s.selectedCanvasNodeId,
         ...syncActiveContext(contextByPane, s.activePane),
+      };
+    });
+  },
+
+  moveNodesToClipboard: (nodeIds) => {
+    set((s) => {
+      let state: Partial<TaskTreeState> & { roots: TaskNode[]; clipboardRoots: TaskNode[] } = {
+        roots: s.roots,
+        clipboardRoots: s.clipboardRoots,
+      };
+      for (const nodeId of nodeIds) {
+        const result = moveBoardNodeToClipboard({ ...s, ...state } as TaskTreeState, nodeId);
+        if (result) {
+          state = { ...state, ...result } as typeof state;
+        }
+      }
+      if (state.roots === s.roots) return {};
+      return {
+        ...state,
+        selectedCanvasNodeId: null,
+        selectedCanvasNodeIds: [],
       };
     });
   },

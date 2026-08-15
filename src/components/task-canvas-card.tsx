@@ -5,9 +5,11 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { cardColorAccentClass, cardColorClass } from "@/lib/card-color";
 import { taskCardRect } from "@/lib/connector-geometry";
 import { isTaskMarkedDone } from "@/lib/task-tags";
+import { taskLinkHref } from "@/lib/task-link";
 import { isNoteNode } from "@/lib/tree-node-kind";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import type { TaskNode } from "@/types/task-node";
+import { NoteMarkdownContent } from "@/components/note-markdown-content";
 
 export interface TaskCanvasCardProps {
   node: TaskNode;
@@ -15,10 +17,14 @@ export interface TaskCanvasCardProps {
   selected: boolean;
   connectSource: boolean;
   dimmed?: boolean;
-  onSelect: () => void;
+  multiSelected?: boolean;
+  onSelect: (shiftKey?: boolean) => void;
   onDrill: () => void;
-  onMove: (x: number, y: number) => void;
+  onMove: (x: number, y: number, delta?: { dx: number; dy: number }) => void;
+  onResize: (width: number, height: number) => void;
+  onRotate: (rotation: number) => void;
   onConnectHandle: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   zoom: number;
   requestTitleEdit?: boolean;
   onTitleEditConsumed?: () => void;
@@ -30,28 +36,42 @@ export function TaskCanvasCard({
   selected,
   connectSource,
   dimmed,
+  multiSelected,
   onSelect,
   onDrill,
   onMove,
+  onResize,
+  onRotate,
   onConnectHandle,
+  onContextMenu,
   zoom,
   requestTitleEdit,
   onTitleEditConsumed,
 }: TaskCanvasCardProps) {
   const rect = taskCardRect(node);
-  const drag = useRef<{ ox: number; oy: number; sx: number; sy: number } | null>(null);
+  const drag = useRef<{ ox: number; oy: number; sx: number; sy: number; lastDx: number; lastDy: number } | null>(null);
   const editingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [draft, setDraft] = useState(node.title);
   const updateCard = useTaskTreeStore((s) => s.updateCard);
   const note = isNoteNode(node);
   const done = !note && isTaskMarkedDone(node, completedTag);
-  const colorClass = note ? "bg-slate-100 border-slate-300" : cardColorClass(node.cardColor) ?? "bg-white border-slate-200";
-  const accent = note ? "bg-slate-400" : cardColorAccentClass(node.cardColor) ?? "bg-sky-500";
+
+  const colorClass = note
+    ? "bg-yellow-50 border-yellow-200/80"
+    : cardColorClass(node.cardColor) ?? "bg-white border-slate-200/60";
+  const accent = note
+    ? "bg-yellow-400"
+    : cardColorAccentClass(node.cardColor) ?? "bg-slate-300";
+
+  const hasChildren = node.children.length > 0;
+  const linkHref = !note ? taskLinkHref(node.link) : null;
+  const showHandles = selected || hovered;
 
   const beginEdit = () => {
-    onSelect();
+    onSelect(false);
     setDraft(node.title);
     editingRef.current = true;
     setEditing(true);
@@ -78,7 +98,7 @@ export function TaskCanvasCard({
     if (!requestTitleEdit || editingRef.current) return;
     beginEdit();
     onTitleEditConsumed?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot from parent
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestTitleEdit]);
 
   useEffect(() => {
@@ -90,10 +110,8 @@ export function TaskCanvasCard({
   }, [editing, node.title]);
 
   useEffect(() => {
-    if (!selected && editingRef.current) {
-      commitTitle();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- commit on deselect only
+    if (!selected && editingRef.current) commitTitle();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
   useEffect(() => {
@@ -102,25 +120,81 @@ export function TaskCanvasCard({
 
   const onTitleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     e.stopPropagation();
-    if (e.key === "Enter") {
-      e.preventDefault();
-      commitTitle();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      cancelEdit();
-    }
+    if (e.key === "Enter") { e.preventDefault(); commitTitle(); }
+    else if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+  };
+
+  const ROTATION_SNAP = 15;
+
+  /** E2-style global resize with corner handles. */
+  const startResize = (e: React.PointerEvent, handle: string) => {
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const orig = { w: rect.w, h: rect.h };
+    const onMoveEv = (ev: PointerEvent) => {
+      const dx = (ev.clientX - startX) / zoom;
+      const dy = (ev.clientY - startY) / zoom;
+      let w = orig.w, h = orig.h;
+      if (handle === "se") { w = Math.max(100, orig.w + dx); h = Math.max(60, orig.h + dy); }
+      else if (handle === "ne") { w = Math.max(100, orig.w + dx); h = Math.max(60, orig.h - dy); }
+      else if (handle === "sw") { w = Math.max(100, orig.w - dx); h = Math.max(60, orig.h + dy); }
+      else if (handle === "nw") { w = Math.max(100, orig.w - dx); h = Math.max(60, orig.h - dy); }
+      onResize(w, h);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMoveEv);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMoveEv);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  /** E2-style global rotation with shift-snap. */
+  const startRotateGlobal = (e: React.PointerEvent) => {
+    const cardEl = e.currentTarget.parentElement as HTMLElement;
+    if (!cardEl) return;
+    const getCenter = () => {
+      const r = cardEl.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    };
+    const angleAt = (cx: number, cy: number) => {
+      const c = getCenter();
+      return (Math.atan2(cy - c.y, cx - c.x) * 180) / Math.PI;
+    };
+    const startAngle = angleAt(e.clientX, e.clientY);
+    const startRotation = node.rotation ?? 0;
+    const onMove = (ev: PointerEvent) => {
+      const delta = angleAt(ev.clientX, ev.clientY) - startAngle;
+      let next = startRotation + delta;
+      if (ev.shiftKey) {
+        next = Math.round(next / ROTATION_SNAP) * ROTATION_SNAP;
+      }
+      onRotate(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   return (
     <div
       className={[
-        "absolute flex flex-col overflow-hidden rounded-md border shadow-sm",
+        "group/card absolute flex flex-col rounded-xl border transition-all duration-150",
         editing ? "" : "select-none",
         colorClass,
-        selected ? "ring-2 ring-teal-600" : "",
-        connectSource ? "ring-2 ring-amber-500" : "",
-        done ? "opacity-60" : "",
-        dimmed ? "opacity-30" : "",
+        selected
+          ? multiSelected
+            ? "ring-2 ring-teal-400/70 ring-offset-2 shadow-xl"
+            : "ring-2 ring-teal-500 ring-offset-1 shadow-xl"
+          : hovered
+            ? "shadow-lg shadow-slate-900/10"
+            : "shadow-md shadow-slate-900/5",
+        connectSource ? "ring-2 ring-amber-400 shadow-xl" : "",
+        done ? "opacity-50 saturate-50" : "",
+        dimmed ? "opacity-25" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -129,48 +203,59 @@ export function TaskCanvasCard({
         top: rect.y,
         width: rect.w,
         height: rect.h,
-        zIndex: selected || connectSource || editing ? 20 : 15,
+        transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
+        transformOrigin: "center center",
+        zIndex: selected || connectSource || editing ? 20 : hovered ? 18 : 15,
       }}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => { if (!drag.current) setHovered(false); }}
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.stopPropagation();
         if (editing) return;
-        onSelect();
+        onSelect(e.shiftKey);
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        drag.current = {
-          ox: e.clientX,
-          oy: e.clientY,
-          sx: rect.x,
-          sy: rect.y,
-        };
+        drag.current = { ox: e.clientX, oy: e.clientY, sx: rect.x, sy: rect.y, lastDx: 0, lastDy: 0 };
       }}
-      onClick={(e) => {
-        e.stopPropagation();
-      }}
+      onClick={(e) => e.stopPropagation()}
       onPointerMove={(e) => {
-        if (!drag.current || editing) return;
+        if (!drag.current) return;
+        if (editing) return;
         e.stopPropagation();
         const dx = (e.clientX - drag.current.ox) / zoom;
         const dy = (e.clientY - drag.current.oy) / zoom;
-        onMove(drag.current.sx + dx, drag.current.sy + dy);
+        if (multiSelected) {
+          const incrementDx = dx - drag.current.lastDx;
+          const incrementDy = dy - drag.current.lastDy;
+          drag.current.lastDx = dx;
+          drag.current.lastDy = dy;
+          onMove(drag.current.sx + dx, drag.current.sy + dy, { dx: incrementDx, dy: incrementDy });
+        } else {
+          onMove(drag.current.sx + dx, drag.current.sy + dy);
+        }
       }}
       onPointerUp={(e) => {
         drag.current = null;
-        try {
-          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-        } catch {
-          /* ignore */
-        }
+        try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* */ }
       }}
       onDoubleClick={(e) => {
         e.stopPropagation();
         if (editing || (e.target as Element | null)?.closest("[data-card-title]")) return;
         onDrill();
       }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu?.(e);
+      }}
     >
-      <div className={`h-1.5 w-full shrink-0 ${accent}`} />
-      <div className="flex min-h-0 flex-1 flex-col gap-1 p-2">
-        <div className="flex items-start justify-between gap-1">
+      {/* Accent bar */}
+      <div className={`h-2 w-full shrink-0 rounded-t-xl ${accent}`} />
+
+      {/* Card body */}
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 py-2">
+        {/* Title row */}
+        <div className="flex items-start justify-between gap-1.5">
           {editing ? (
             <input
               ref={inputRef}
@@ -181,67 +266,152 @@ export function TaskCanvasCard({
               onBlur={commitTitle}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              className="min-w-0 flex-1 rounded border border-sky-300 bg-white px-1 py-0.5 text-sm font-semibold text-slate-900 outline-none ring-2 ring-sky-200"
+              className="min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-1.5 py-0.5 text-[13px] font-semibold text-slate-900 outline-none ring-2 ring-sky-200/60"
               aria-label="Titel"
             />
           ) : (
+            <span
+              data-card-title
+              className="min-w-0 flex-1 cursor-text line-clamp-3 text-[13px] font-semibold leading-snug text-slate-900"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); beginEdit(); }}
+            >
+              {node.title.trim() || <span className="text-slate-400 font-normal italic">Ohne Titel</span>}
+            </span>
+          )}
+
+          {/* Child indicator badge */}
+          {hasChildren && (
             <button
               type="button"
-              data-card-title
-              className="min-w-0 flex-1 line-clamp-2 text-left text-sm font-semibold leading-snug text-slate-900 hover:underline decoration-slate-300 underline-offset-2"
+              title={`${node.children.length} Unterkarte${node.children.length > 1 ? "n" : ""} — Doppelklick zum Öffnen`}
+              className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors"
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                beginEdit();
-              }}
+              onClick={(e) => { e.stopPropagation(); onDrill(); }}
             >
-              {node.title.trim() || "(Ohne Titel)"}
+              <svg className="h-2.5 w-2.5" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2 4h4v4H2V4zm0 6h4v4H2v-4zm6-6h4v4H8V4zm6 0h2v2h-2V4zM8 10h4v4H8v-4z" opacity="0.7" />
+              </svg>
+              {node.children.length}
             </button>
           )}
-          <button
-            type="button"
-            title="Hinein"
-            className="shrink-0 rounded px-1 text-xs text-slate-500 hover:bg-black/5 hover:text-slate-800"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDrill();
-            }}
-          >
-            →
-          </button>
         </div>
+
+        {/* Link */}
+        {linkHref && (
+          <a
+            href={linkHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={linkHref}
+            className="group/link flex items-center gap-1.5 truncate rounded-md bg-sky-50/80 px-2 py-1 text-[11px] text-sky-700 no-underline transition-colors hover:bg-sky-100 hover:text-sky-900"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <svg className="h-3 w-3 shrink-0 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+            <span className="truncate group-hover/link:underline">
+              {(() => { try { const u = new URL(linkHref); return u.hostname.replace("www.", ""); } catch { return linkHref; } })()}
+            </span>
+          </a>
+        )}
+
+        {/* Description */}
         {!note && node.description.trim() ? (
-          <p className="line-clamp-3 text-[11px] leading-snug text-slate-600">{node.description}</p>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <p className="text-[11px] leading-relaxed text-slate-500 overflow-hidden" style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: "unset" }}>{node.description}</p>
+          </div>
         ) : null}
-        {note ? (
-          <p className="text-[10px] uppercase tracking-wide text-slate-500">Notiz</p>
+
+        {/* Note markdown content */}
+        {note && node.markdown?.trim() ? (
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <NoteMarkdownContent markdown={node.markdown} compact />
+          </div>
+        ) : note ? (
+          <p className="text-[11px] italic text-slate-400">Leere Notiz</p>
         ) : null}
+
+        {/* Tags */}
         {!note && node.tags.length > 0 ? (
-          <div className="mt-auto flex flex-wrap gap-1">
+          <div className="mt-auto flex flex-wrap gap-1 pt-0.5">
             {node.tags.slice(0, 4).map((tag) => (
               <span
                 key={tag}
-                className="rounded bg-black/5 px-1 py-0.5 text-[10px] text-slate-600"
+                className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
               >
                 {tag}
               </span>
             ))}
+            {node.tags.length > 4 && (
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400">
+                +{node.tags.length - 4}
+              </span>
+            )}
           </div>
         ) : null}
       </div>
-      <button
-        type="button"
-        title="Verbinden"
-        className="absolute -right-2 top-1/2 z-30 h-4 w-4 -translate-y-1/2 rounded-full border border-slate-400 bg-white text-[10px] leading-none text-slate-600 shadow hover:border-teal-600 hover:text-teal-700"
+
+      {/* === Handles (appear on hover/select) === */}
+
+      {/* Connect handle — right edge */}
+      <div
+        className={[
+          "absolute -right-3 top-1/2 z-30 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border-2 bg-white shadow-md transition-all duration-100",
+          connectSource
+            ? "border-amber-400 text-amber-600 scale-110"
+            : "border-slate-300 text-slate-400 hover:border-teal-500 hover:text-teal-600 hover:scale-110",
+          showHandles ? "opacity-100" : "opacity-0 pointer-events-none",
+        ].join(" ")}
+        title="Verbinden — Klicken um Pfeil zu starten"
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          onConnectHandle();
-        }}
+        onClick={(e) => { e.stopPropagation(); onConnectHandle(); }}
       >
-        ✦
-      </button>
+        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12" />
+          <polyline points="12 5 19 12 12 19" />
+        </svg>
+      </div>
+
+      {/* Resize handles — all 4 corners, E2-style (only single-select) */}
+      {selected && !multiSelected && !editing && (
+        <>
+          <div className="absolute -bottom-1.5 -right-1.5 z-20 h-3 w-3 cursor-nwse-resize rounded-sm border border-sky-600 bg-white shadow-sm"
+            onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); e.preventDefault(); startResize(e, "se"); }} />
+          <div className="absolute -bottom-1.5 -left-1.5 z-20 h-3 w-3 cursor-nesw-resize rounded-sm border border-sky-600 bg-white shadow-sm"
+            onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); e.preventDefault(); startResize(e, "sw"); }} />
+          <div className="absolute -top-1.5 -right-1.5 z-20 h-3 w-3 cursor-nesw-resize rounded-sm border border-sky-600 bg-white shadow-sm"
+            onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); e.preventDefault(); startResize(e, "ne"); }} />
+          <div className="absolute -top-1.5 -left-1.5 z-20 h-3 w-3 cursor-nwse-resize rounded-sm border border-sky-600 bg-white shadow-sm"
+            onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); e.preventDefault(); startResize(e, "nw"); }} />
+        </>
+      )}
+
+      {/* Rotation handle — top-center, E2-style with Shift=15° snap */}
+      {selected && !multiSelected && !editing && (
+        <button
+          type="button"
+          aria-label="Drehen"
+          title="Drehen (Shift: 15°-Raster)"
+          className="absolute left-1/2 top-0 z-20 flex h-5 w-5 -translate-x-1/2 -translate-y-7 cursor-grab items-center justify-center rounded-full border border-sky-600 bg-white text-sky-700 shadow-sm active:cursor-grabbing"
+          onPointerDown={(e) => { if (e.button !== 0) return; e.stopPropagation(); e.preventDefault(); startRotateGlobal(e); }}
+        >
+          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 2v6h-6" />
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+          </svg>
+        </button>
+      )}
+
+      {/* Drill-in indicator — bottom-right subtle arrow (only on hover, when has children) */}
+      {hasChildren && !selected && hovered && (
+        <div className="absolute bottom-1.5 right-2 text-[10px] text-slate-400 pointer-events-none">
+          ⏎
+        </div>
+      )}
     </div>
   );
 }

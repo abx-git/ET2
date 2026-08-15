@@ -103,7 +103,7 @@ export function boardJsonFromStoreState(): string {
       s.filterCombineMode,
       s.noteAccentColor,
       s.filterExcludeTags,
-      s.relations ?? [],
+      s.relations,
       s.appearance,
     ),
   );
@@ -156,7 +156,7 @@ export function boardPersistKeyFromStoreState(): string {
     completedTag: s.completedTag,
     clipboardRoots: s.clipboardRoots,
     templates: getTemplatesSnapshot(),
-    relations: s.relations ?? [],
+    relations: s.relations,
     appearance: s.appearance,
   });
 }

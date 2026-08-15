@@ -216,28 +216,15 @@ export function WorkingFileSync({
           result.reason === "empty_over_nonempty" ||
           result.reason === "unknown_disk_baseline"
         ) {
-          const handle = getWorkingFileHandle();
-          const snap = handle
-            ? await readWorkingFileSnapshot(handle)
-            : result.diskJson != null
-              ? { text: result.diskJson, lastModified: Date.now() }
-              : null;
-          if (snap) {
-            if (isWorkingFileDirty()) {
-              const editorJson = boardJsonFromStoreState();
-              if (editorJson.trim() && !boardStatesEquivalent(editorJson, snap.text)) {
-                downloadWorkingFileSafetyCopy(editorJson, "editor");
-              }
-            }
-            suspendAutoPersistRef.current = true;
-            try {
-              if (snap.text.trim()) applyBoardJsonToStore(snap.text);
-              markWorkingFileSynced(snap.text, snap.lastModified);
-              lastPersistKeyRef.current = boardPersistKeyFromStoreState();
-            } finally {
-              suspendAutoPersistRef.current = false;
-            }
+          // Retry once with CAS skipped — during rapid edits (drag), the conflict
+          // is almost always self-caused (our own previous write changed mtime).
+          const retryResult = await persistWorkingFileJson(boardJsonFromStoreState(), { skipCas: true });
+          if (retryResult.ok) {
+            lastPersistKeyRef.current = boardPersistKeyFromStoreState();
+            syncDirty();
+            return true;
           }
+          // If retry also fails, mark dirty but do NOT overwrite the editor state.
           syncDirty();
           return false;
         }

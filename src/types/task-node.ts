@@ -37,6 +37,8 @@ export interface TaskNode {
   /** Optionale Canvas-Größe; sonst Default aus Card-Type-Registry. */
   width?: number;
   height?: number;
+  /** Optionale Rotation in Grad (0 = normal). */
+  rotation?: number;
   children: TaskNode[];
 }
 

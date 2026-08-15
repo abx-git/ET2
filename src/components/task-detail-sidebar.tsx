@@ -45,7 +45,7 @@ function splitTagInput(raw: string): string[] {
 
 export function TaskDetailSidebar() {
   const roots = useTaskTreeStore((s) => s.roots);
-  const relations = useTaskTreeStore((s) => s.relations ?? []);
+  const relations = useTaskTreeStore((s) => s.relations);
   const selectedCanvasNodeId = useTaskTreeStore((s) => s.selectedCanvasNodeId);
   const selectedRelationId = useTaskTreeStore((s) => s.selectedRelationId);
   const setSelectedCanvasNodeId = useTaskTreeStore((s) => s.setSelectedCanvasNodeId);

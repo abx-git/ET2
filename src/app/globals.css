@@ -5,10 +5,10 @@
 :root {
   color-scheme: light;
   --bg: #f4f6f8;
-  --panel: rgba(244, 246, 248, 0.92);
-  --panel-solid: #f4f6f8;
+  --panel: rgba(249, 250, 251, 0.95);
+  --panel-solid: #f9fafb;
   --text: #1a2330;
-  --muted: #5c6b7a;
+  --muted: #4a5568;
   --accent: #0f766e;
   --accent-2: #ca8a04;
   --border: rgba(30, 40, 55, 0.14);
@@ -16,7 +16,7 @@
   --control-hover: #eef1f4;
   --radius: 12px;
   --shadow: 0 10px 36px rgba(0, 0, 0, 0.12);
-  --canvas: #e8ecf1;
+  --canvas: #edf0f4;
 }
 
 body {

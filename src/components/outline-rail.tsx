@@ -92,8 +92,8 @@ function OutlineRow({
         setDropRef(el);
       }}
       className={[
-        "group flex touch-none cursor-grab items-center gap-0.5 rounded-md px-0.5 py-0.5 text-left text-xs active:cursor-grabbing",
-        selected ? "bg-sky-100/90 text-sky-950" : "text-slate-700 hover:bg-white",
+        "group flex touch-none cursor-grab items-center gap-0.5 rounded-md px-0.5 py-0.5 text-left text-[13px] leading-snug active:cursor-grabbing",
+        selected ? "bg-sky-100/90 text-sky-950 font-medium" : "text-slate-900 hover:bg-white",
         isDragging ? "opacity-40" : "",
         isNestTarget || isOver
           ? isNoteNode(node)
@@ -132,7 +132,7 @@ function OutlineRow({
         type="button"
         className={[
           "min-w-0 flex-1 truncate py-0.5 text-left",
-          done ? "text-slate-400 line-through" : "",
+          done ? "text-slate-500 line-through" : "",
         ].join(" ")}
         title={nodeDisplayTitle(node)}
         onPointerDown={(e) => e.stopPropagation()}

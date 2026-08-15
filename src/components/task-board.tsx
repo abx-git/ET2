@@ -219,7 +219,7 @@ export function TaskBoard() {
   const setSplitViewEnabled = useTaskTreeStore((s) => s.setSplitViewEnabled);
   const boardViewMode = useTaskTreeStore((s) => s.boardViewMode ?? "list");
   const setBoardViewMode = useTaskTreeStore((s) => s.setBoardViewMode);
-  const relations = useTaskTreeStore((s) => s.relations ?? []);
+  const relations = useTaskTreeStore((s) => s.relations);
   const appearance = useTaskTreeStore((s) => s.appearance);
   const isMobileLayout = useSyncExternalStore(
     subscribeMobileLayout,
@@ -327,7 +327,7 @@ export function TaskBoard() {
     listParentId: string | null;
     insertIndex: number;
   } | null>(null);
-  const templateCount = useSyncExternalStore(subscribeTemplates, getTemplatesSnapshot, () => []).length;
+  const templateCount = useSyncExternalStore(subscribeTemplates, getTemplatesSnapshot, getTemplatesSnapshot).length;
   const importFileRef = useRef<HTMLInputElement>(null);
   const workingFilePickRef = useRef<HTMLInputElement>(null);
 
@@ -1861,11 +1861,13 @@ export function TaskBoard() {
 
       <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--panel-solid)] px-4 py-1.5 text-[0.72rem] text-[var(--muted)]">
         <span className="min-w-0 truncate">
-          {workingFileName
-            ? `Arbeitsdatei: ${workingFileName}${workingFileDirty ? " · ungespeichert" : workingFileSaving ? " · speichert …" : " · gespeichert"}`
-            : workingFileAttached
-              ? "Arbeitsdatei verknüpft"
-              : "Keine Arbeitsdatei"}
+          {!workingFileUiReady
+            ? "\u00A0"
+            : workingFileName
+              ? `Arbeitsdatei: ${workingFileName}${workingFileDirty ? " · ungespeichert" : workingFileSaving ? " · speichert …" : " · gespeichert"}`
+              : workingFileAttached
+                ? "Arbeitsdatei verknüpft"
+                : "Keine Arbeitsdatei"}
         </span>
         <span className="hidden shrink-0 sm:inline">ET2 · © A. Bergmann</span>
         <span className="shrink-0 sm:hidden">© A. Bergmann</span>

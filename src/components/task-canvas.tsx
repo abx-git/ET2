@@ -5,9 +5,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TaskCanvasCard } from "@/components/task-canvas-card";
 import { TaskConnectors } from "@/components/task-connectors";
 import { TaskDetailSidebar } from "@/components/task-detail-sidebar";
+import { CanvasGroupBox } from "@/components/canvas-group-box";
 import { contextChildren } from "@/lib/board-context";
 import { nodeMatchesBoardFilters } from "@/lib/board-filters";
 import { nodeHasCanvasPosition } from "@/lib/canvas-layout";
+import { isNodeInsideGroup } from "@/lib/canvas-group";
 import {
   DEFAULT_CANVAS_VIEWPORT,
   screenToWorld,
@@ -15,6 +17,8 @@ import {
   ZOOM_STEP,
   type CanvasViewport,
 } from "@/lib/canvas-viewport";
+import { taskCardRect } from "@/lib/connector-geometry";
+import { exportCanvasAsPrompt } from "@/lib/prompt-export";
 import { relationsForContext } from "@/lib/task-relations";
 import { isTaskMarkedDone } from "@/lib/task-tags";
 import { isNoteNode } from "@/lib/tree-node-kind";
@@ -28,23 +32,41 @@ import {
 const WORLD_W = 4000;
 const WORLD_H = 3000;
 
+const EMPTY_GROUPS: import("@/lib/canvas-group").CanvasGroup[] = [];
+
+interface LassoRect {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 export function TaskCanvas() {
   const roots = useTaskTreeStore((s) => s.roots);
   const contextNodeId = useTaskTreeStore((s) => s.contextNodeId);
-  const relations = useTaskTreeStore((s) => s.relations ?? []);
+  const relations = useTaskTreeStore((s) => s.relations);
   const completedTag = useTaskTreeStore((s) => s.completedTag);
   const canvasViewport = useTaskTreeStore((s) => s.canvasViewport);
   const setCanvasViewport = useTaskTreeStore((s) => s.setCanvasViewport);
   const ensureContextCanvasLayout = useTaskTreeStore((s) => s.ensureContextCanvasLayout);
   const moveCanvasNode = useTaskTreeStore((s) => s.moveCanvasNode);
+  const moveCanvasNodesBy = useTaskTreeStore((s) => s.moveCanvasNodesBy);
+  const resizeCanvasNode = useTaskTreeStore((s) => s.resizeCanvasNode);
+  const rotateCanvasNode = useTaskTreeStore((s) => s.rotateCanvasNode);
   const drillIntoNode = useTaskTreeStore((s) => s.drillIntoNode);
   const addCardAfter = useTaskTreeStore((s) => s.addCardAfter);
+  const addNoteAfter = useTaskTreeStore((s) => s.addNoteAfter);
+  const removeCard = useTaskTreeStore((s) => s.removeCard);
+  const moveNodesToClipboard = useTaskTreeStore((s) => s.moveNodesToClipboard);
   const connectTasks = useTaskTreeStore((s) => s.connectTasks);
   const disconnectRelation = useTaskTreeStore((s) => s.disconnectRelation);
   const selectedRelationId = useTaskTreeStore((s) => s.selectedRelationId);
   const setSelectedRelationId = useTaskTreeStore((s) => s.setSelectedRelationId);
   const selectedCanvasNodeId = useTaskTreeStore((s) => s.selectedCanvasNodeId);
   const setSelectedCanvasNodeId = useTaskTreeStore((s) => s.setSelectedCanvasNodeId);
+  const selectedCanvasNodeIds = useTaskTreeStore((s) => s.selectedCanvasNodeIds);
+  const toggleCanvasNodeSelected = useTaskTreeStore((s) => s.toggleCanvasNodeSelected);
+  const clearCanvasMultiSelect = useTaskTreeStore((s) => s.clearCanvasMultiSelect);
   const relationConnectMode = useTaskTreeStore((s) => s.relationConnectMode);
   const setRelationConnectMode = useTaskTreeStore((s) => s.setRelationConnectMode);
   const relationDraftSourceId = useTaskTreeStore((s) => s.relationDraftSourceId);
@@ -58,12 +80,22 @@ export function TaskCanvas() {
   const filterScheduleKinds = useTaskTreeStore((s) => s.filterScheduleKinds);
   const filterCombineMode = useTaskTreeStore((s) => s.filterCombineMode);
 
+  const canvasGroups = useTaskTreeStore((s) => s.canvasGroups[s.contextNodeId ?? "__root__"] || EMPTY_GROUPS);
+  const addCanvasGroup = useTaskTreeStore((s) => s.addCanvasGroup);
+  const updateCanvasGroup = useTaskTreeStore((s) => s.updateCanvasGroup);
+  const removeCanvasGroup = useTaskTreeStore((s) => s.removeCanvasGroup);
+
   const shellRef = useRef<HTMLDivElement>(null);
   const [panning, setPanning] = useState(false);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [pendingTitleEditId, setPendingTitleEditId] = useState<string | null>(null);
+  const [lasso, setLasso] = useState<LassoRect | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const spaceDown = useRef(false);
+  const multiDrag = useRef<{ ox: number; oy: number } | null>(null);
+  const lassoJustFinished = useRef(false);
 
   const contextKids = useMemo(
     () => contextChildren(roots, contextNodeId),
@@ -117,6 +149,22 @@ export function TaskCanvas() {
 
   const selectedRelation = visibleRelations.find((r) => r.id === selectedRelationId) ?? null;
 
+  // Check if a node is in the lasso selection area
+  const isNodeInLasso = useCallback(
+    (nodeId: string, lassoRect: LassoRect) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (!node) return false;
+      const r = taskCardRect(node);
+      const lx = Math.min(lassoRect.x1, lassoRect.x2);
+      const ly = Math.min(lassoRect.y1, lassoRect.y2);
+      const lw = Math.abs(lassoRect.x2 - lassoRect.x1);
+      const lh = Math.abs(lassoRect.y2 - lassoRect.y1);
+      // Intersection check
+      return !(r.x > lx + lw || r.x + r.w < lx || r.y > ly + lh || r.y + r.h < ly);
+    },
+    [nodes],
+  );
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Space" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) {
@@ -129,12 +177,25 @@ export function TaskCanvas() {
         setRelationDraftSourceId(null);
         setSelectedRelationId(null);
         setSelectedCanvasNodeId(null);
+        clearCanvasMultiSelect();
+        setContextMenu(null);
       }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedRelationId) {
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
         e.preventDefault();
         disconnectRelation(selectedRelationId);
+      }
+      // Select all with Ctrl/Cmd+A
+      if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+        e.preventDefault();
+        const store = useTaskTreeStore.getState();
+        if (store.boardViewMode === "canvas") {
+          const allIds = nodes.map((n) => n.id);
+          useTaskTreeStore.setState({ selectedCanvasNodeIds: allIds, selectedCanvasNodeId: null });
+        }
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -151,11 +212,13 @@ export function TaskCanvas() {
     };
   }, [
     disconnectRelation,
+    nodes,
     selectedRelationId,
     setRelationConnectMode,
     setRelationDraftSourceId,
     setSelectedRelationId,
     setSelectedCanvasNodeId,
+    clearCanvasMultiSelect,
   ]);
 
   useEffect(() => {
@@ -206,6 +269,64 @@ export function TaskCanvas() {
     [connectTasks, setRelationConnectMode, setRelationDraftSourceId],
   );
 
+  const handleCardSelect = useCallback(
+    (nodeId: string, shiftKey: boolean) => {
+      if (shiftKey) {
+        toggleCanvasNodeSelected(nodeId);
+      } else {
+        // If the card is already part of a multi-selection, keep the selection
+        // (so user can drag the group without losing it)
+        const multiIds = useTaskTreeStore.getState().selectedCanvasNodeIds;
+        if (multiIds.length > 1 && multiIds.includes(nodeId)) {
+          // Already in multi-select, just set as primary for detail sidebar
+          useTaskTreeStore.setState({ selectedCanvasNodeId: nodeId });
+          return;
+        }
+        setSelectedCanvasNodeId(nodeId);
+        if (relationConnectMode && relationDraftSourceId && relationDraftSourceId !== nodeId) {
+          connectTasks(relationDraftSourceId, nodeId);
+          setRelationConnectMode(false);
+        } else if (relationConnectMode && !relationDraftSourceId) {
+          setRelationDraftSourceId(nodeId);
+        }
+      }
+    },
+    [
+      toggleCanvasNodeSelected,
+      setSelectedCanvasNodeId,
+      relationConnectMode,
+      relationDraftSourceId,
+      connectTasks,
+      setRelationConnectMode,
+      setRelationDraftSourceId,
+    ],
+  );
+
+  const handleCardMove = useCallback(
+    (nodeId: string, x: number, y: number, isMultiDragDelta?: { dx: number; dy: number }) => {
+      const multiIds = useTaskTreeStore.getState().selectedCanvasNodeIds;
+      if (multiIds.length > 1 && multiIds.includes(nodeId) && isMultiDragDelta) {
+        moveCanvasNodesBy(isMultiDragDelta.dx, isMultiDragDelta.dy);
+      } else {
+        moveCanvasNode(nodeId, x, y);
+      }
+    },
+    [moveCanvasNode, moveCanvasNodesBy],
+  );
+
+  // Lasso rect in screen coords to world
+  const lassoToWorld = useCallback(
+    (screenLasso: LassoRect): LassoRect => {
+      const el = shellRef.current;
+      if (!el) return screenLasso;
+      const r = el.getBoundingClientRect();
+      const w1 = screenToWorld(canvasViewport, screenLasso.x1, screenLasso.y1, r);
+      const w2 = screenToWorld(canvasViewport, screenLasso.x2, screenLasso.y2, r);
+      return { x1: w1.x, y1: w1.y, x2: w2.x, y2: w2.y };
+    },
+    [canvasViewport],
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-row">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -247,8 +368,55 @@ export function TaskCanvas() {
         >
           Ansicht zurücksetzen
         </button>
+        <button
+          type="button"
+          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
+          title="Alle Karten dieser Ansicht als Text-Prompt in die Zwischenablage kopieren"
+          onClick={() => {
+            const prompt = exportCanvasAsPrompt(nodes, visibleRelations, {
+              contextTitle: contextNodeId
+                ? nodes.length > 0 ? `Canvas-Ansicht (${nodes.length} Karten)` : undefined
+                : "Board-Übersicht",
+            });
+            navigator.clipboard.writeText(prompt).then(() => {
+              // Brief visual feedback
+              const btn = document.activeElement as HTMLElement | null;
+              if (btn) {
+                const orig = btn.textContent;
+                btn.textContent = "✓ Kopiert";
+                setTimeout(() => { btn.textContent = orig; }, 1200);
+              }
+            });
+          }}
+        >
+          Prompt-Export
+        </button>
+        <button
+          type="button"
+          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
+          title="Gruppierungs-Box im Canvas erstellen"
+          onClick={() => {
+            const id = `grp-${Date.now().toString(36)}`;
+            addCanvasGroup({
+              id,
+              label: "Neue Gruppe",
+              x: 50,
+              y: 50,
+              width: 400,
+              height: 300,
+            });
+            setSelectedGroupId(id);
+          }}
+        >
+          + Gruppe
+        </button>
+        {selectedCanvasNodeIds.length > 1 && (
+          <span className="rounded bg-teal-100 px-2 py-0.5 text-teal-800">
+            {selectedCanvasNodeIds.length} Karten ausgewählt
+          </span>
+        )}
         <span className="text-slate-400">
-          Leertaste+Ziehen = Pan · Doppelklick = hinein · Auswahl → Details rechts
+          Leertaste+Ziehen = Pan · Doppelklick = hinein · Shift+Klick = Multi-Auswahl · Lasso = Bereich wählen
           {selectedRelation ? " · Entf = Pfeil löschen" : ""}
         </span>
       </div>
@@ -260,28 +428,74 @@ export function TaskCanvas() {
           spaceHeld || panning ? (panning ? "cursor-grabbing" : "cursor-grab") : "cursor-default",
         ].join(" ")}
         onPointerDown={(e) => {
+          // Middle-mouse or Space+left = Pan
           if (e.button === 1 || (e.button === 0 && spaceDown.current)) {
             e.preventDefault();
             beginPan(e.clientX, e.clientY, canvasViewport);
             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            return;
+          }
+          // Left click on background = start lasso selection
+          if (e.button === 0 && !spaceDown.current && (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("et2-canvas-world"))) {
+            const startX = e.clientX;
+            const startY = e.clientY;
+            setLasso({ x1: startX, y1: startY, x2: startX, y2: startY });
+            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
           }
         }}
         onPointerMove={(e) => {
-          if (!panning) return;
-          setCanvasViewport({
-            ...canvasViewport,
-            x: panStart.current.vx + (e.clientX - panStart.current.x),
-            y: panStart.current.vy + (e.clientY - panStart.current.y),
-          });
+          if (panning) {
+            setCanvasViewport({
+              ...canvasViewport,
+              x: panStart.current.vx + (e.clientX - panStart.current.x),
+              y: panStart.current.vy + (e.clientY - panStart.current.y),
+            });
+            return;
+          }
+          if (lasso) {
+            setLasso((prev) => prev ? { ...prev, x2: e.clientX, y2: e.clientY } : null);
+          }
         }}
         onPointerUp={(e) => {
-          if (!panning) return;
-          setPanning(false);
+          if (panning) {
+            setPanning(false);
+            try {
+              (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+            } catch { /* ignore */ }
+            return;
+          }
+          if (lasso) {
+            // Finalize lasso selection
+            const finalLasso = { ...lasso, x2: e.clientX, y2: e.clientY };
+            const dx = Math.abs(finalLasso.x2 - finalLasso.x1);
+            const dy = Math.abs(finalLasso.y2 - finalLasso.y1);
+            if (dx > 5 || dy > 5) {
+              // Actually dragged a selection area
+              const worldLasso = lassoToWorld(finalLasso);
+              const selected: string[] = [];
+              for (const n of nodes) {
+                if (isNodeInLasso(n.id, worldLasso)) {
+                  selected.push(n.id);
+                }
+              }
+              if (selected.length > 0) {
+                useTaskTreeStore.setState({
+                  selectedCanvasNodeIds: selected,
+                  selectedCanvasNodeId: selected.length === 1 ? selected[0]! : null,
+                });
+              }
+              lassoJustFinished.current = true;
+              setTimeout(() => { lassoJustFinished.current = false; }, 0);
+            }
+            setLasso(null);
+            try {
+              (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+            } catch { /* ignore */ }
+            return;
+          }
           try {
             (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-          } catch {
-            /* ignore */
-          }
+          } catch { /* ignore */ }
         }}
         onDoubleClick={(e) => {
           if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("et2-canvas-world")) {
@@ -296,11 +510,38 @@ export function TaskCanvas() {
           setSelectedCanvasNodeId(id);
           setPendingTitleEditId(id);
         }}
-        onClick={() => {
-          setSelectedCanvasNodeId(null);
-          setSelectedRelationId(null);
+        onClick={(e) => {
+          // Only clear selection if directly clicking background (not from lasso)
+          if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("et2-canvas-world")) {
+            if (!lasso && !lassoJustFinished.current) {
+              setSelectedCanvasNodeId(null);
+              setSelectedRelationId(null);
+              clearCanvasMultiSelect();
+              setSelectedGroupId(null);
+              setContextMenu(null);
+            }
+          }
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          const el = shellRef.current;
+          if (!el) return;
+          const rect = el.getBoundingClientRect();
+          setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top });
         }}
       >
+        {/* Lasso selection rectangle */}
+        {lasso && Math.abs(lasso.x2 - lasso.x1) + Math.abs(lasso.y2 - lasso.y1) > 5 && (
+          <div
+            className="pointer-events-none absolute z-50 border-2 border-dashed border-teal-500 bg-teal-500/10"
+            style={{
+              left: Math.min(lasso.x1, lasso.x2) - (shellRef.current?.getBoundingClientRect().left ?? 0),
+              top: Math.min(lasso.y1, lasso.y2) - (shellRef.current?.getBoundingClientRect().top ?? 0),
+              width: Math.abs(lasso.x2 - lasso.x1),
+              height: Math.abs(lasso.y2 - lasso.y1),
+            }}
+          />
+        )}
         <div
           className="et2-canvas-world absolute left-0 top-0 origin-top-left"
           style={{
@@ -309,6 +550,31 @@ export function TaskCanvas() {
             transform: `translate(${canvasViewport.x}px, ${canvasViewport.y}px) scale(${canvasViewport.zoom})`,
           }}
         >
+          {/* Grouping boxes (behind cards) */}
+          {canvasGroups.map((group) => (
+            <CanvasGroupBox
+              key={group.id}
+              group={group}
+              selected={selectedGroupId === group.id}
+              zoom={canvasViewport.zoom}
+              onSelect={() => setSelectedGroupId(group.id)}
+              onMove={(x, y, delta) => {
+                // Move cards whose center is inside the group bounding box
+                for (const n of nodes) {
+                  const nw = n.width ?? 220;
+                  const nh = n.height ?? 120;
+                  if (isNodeInsideGroup(n.x ?? 0, n.y ?? 0, nw, nh, group)) {
+                    moveCanvasNode(n.id, (n.x ?? 0) + delta.dx, (n.y ?? 0) + delta.dy);
+                  }
+                }
+                updateCanvasGroup(group.id, { x, y });
+              }}
+              onResize={(w, h) => updateCanvasGroup(group.id, { width: w, height: h })}
+              onLabelChange={(label) => updateCanvasGroup(group.id, { label })}
+              onRemove={() => { removeCanvasGroup(group.id); setSelectedGroupId(null); }}
+            />
+          ))}
+
           <TaskConnectors
             nodes={nodes}
             relations={visibleRelations}
@@ -323,23 +589,25 @@ export function TaskCanvas() {
               key={node.id}
               node={node}
               completedTag={completedTag}
-              selected={selectedCanvasNodeId === node.id}
+              selected={selectedCanvasNodeId === node.id || selectedCanvasNodeIds.includes(node.id)}
               connectSource={relationDraftSourceId === node.id}
               zoom={canvasViewport.zoom}
               requestTitleEdit={pendingTitleEditId === node.id}
               onTitleEditConsumed={() => setPendingTitleEditId(null)}
-              onSelect={() => {
-                setSelectedCanvasNodeId(node.id);
-                if (relationConnectMode && relationDraftSourceId && relationDraftSourceId !== node.id) {
-                  connectTasks(relationDraftSourceId, node.id);
-                  setRelationConnectMode(false);
-                } else if (relationConnectMode && !relationDraftSourceId) {
-                  setRelationDraftSourceId(node.id);
-                }
-              }}
+              onSelect={(shiftKey) => handleCardSelect(node.id, shiftKey ?? false)}
               onDrill={() => drillIntoNode(node.id)}
-              onMove={(x, y) => moveCanvasNode(node.id, x, y)}
+              onMove={(x, y, delta) => handleCardMove(node.id, x, y, delta)}
+              onResize={(w, h) => resizeCanvasNode(node.id, w, h)}
+              onRotate={(r) => rotateCanvasNode(node.id, r)}
               onConnectHandle={() => handleCardConnect(node.id)}
+              onContextMenu={(e) => {
+                const el = shellRef.current;
+                if (!el) return;
+                const rect = el.getBoundingClientRect();
+                setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, nodeId: node.id });
+                setSelectedCanvasNodeId(node.id);
+              }}
+              multiSelected={selectedCanvasNodeIds.includes(node.id) && selectedCanvasNodeIds.length > 1}
             />
           ))}
           {nodes.length === 0 ? (
@@ -348,6 +616,152 @@ export function TaskCanvas() {
             </div>
           ) : null}
         </div>
+
+        {/* Right-click context menu */}
+        {contextMenu && (
+          <div
+            className="absolute z-[100] min-w-[180px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl text-[13px] text-slate-800"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {contextMenu.nodeId ? (
+              <>
+                {/* Card-specific context menu */}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    drillIntoNode(contextMenu.nodeId!);
+                    setContextMenu(null);
+                  }}
+                >
+                  → Hinein
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    setRelationConnectMode(true);
+                    setRelationDraftSourceId(contextMenu.nodeId!);
+                    setContextMenu(null);
+                  }}
+                >
+                  ↗ Verbindung ab hier
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    setPendingTitleEditId(contextMenu.nodeId!);
+                    setContextMenu(null);
+                  }}
+                >
+                  ✎ Titel bearbeiten
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    const ids = selectedCanvasNodeIds.length > 1 && selectedCanvasNodeIds.includes(contextMenu.nodeId!)
+                      ? selectedCanvasNodeIds
+                      : [contextMenu.nodeId!];
+                    moveNodesToClipboard(ids);
+                    setContextMenu(null);
+                  }}
+                >
+                  📋 In Zwischenablage
+                </button>
+                <hr className="my-1 border-slate-100" />
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-700 hover:bg-red-50"
+                  onClick={() => {
+                    removeCard(contextMenu.nodeId!);
+                    setContextMenu(null);
+                  }}
+                >
+                  🗑 Karte löschen
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Background context menu */}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    const el = shellRef.current;
+                    if (!el) { setContextMenu(null); return; }
+                    const rect = el.getBoundingClientRect();
+                    const world = screenToWorld(canvasViewport, contextMenu.x + rect.left, contextMenu.y + rect.top, rect);
+                    const id = addCardAfter(contextNodeId);
+                    moveCanvasNode(id, world.x - 110, world.y - 60);
+                    setSelectedCanvasNodeId(id);
+                    setPendingTitleEditId(id);
+                    setContextMenu(null);
+                  }}
+                >
+                  + Neue Karte
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    const el = shellRef.current;
+                    if (!el) { setContextMenu(null); return; }
+                    const rect = el.getBoundingClientRect();
+                    const world = screenToWorld(canvasViewport, contextMenu.x + rect.left, contextMenu.y + rect.top, rect);
+                    const id = addNoteAfter(contextNodeId);
+                    moveCanvasNode(id, world.x - 120, world.y - 80);
+                    setSelectedCanvasNodeId(id);
+                    setContextMenu(null);
+                  }}
+                >
+                  + Neue Notiz
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    const el = shellRef.current;
+                    if (!el) { setContextMenu(null); return; }
+                    const rect = el.getBoundingClientRect();
+                    const world = screenToWorld(canvasViewport, contextMenu.x + rect.left, contextMenu.y + rect.top, rect);
+                    const id = `grp-${Date.now().toString(36)}`;
+                    addCanvasGroup({ id, label: "Gruppe", x: world.x - 200, y: world.y - 150, width: 400, height: 300 });
+                    setSelectedGroupId(id);
+                    setContextMenu(null);
+                  }}
+                >
+                  ▭ Gruppe erstellen
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    setRelationConnectMode(!relationConnectMode);
+                    setContextMenu(null);
+                  }}
+                >
+                  ↗ {relationConnectMode ? "Verbindungsmodus beenden" : "Verbinden"}
+                </button>
+                <hr className="my-1 border-slate-100" />
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    const prompt = exportCanvasAsPrompt(nodes, visibleRelations);
+                    navigator.clipboard.writeText(prompt);
+                    setContextMenu(null);
+                  }}
+                >
+                  📋 Prompt-Export
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
       </div>
       <TaskDetailSidebar />
