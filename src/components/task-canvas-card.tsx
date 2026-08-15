@@ -183,7 +183,7 @@ export function TaskCanvasCard({
     <div
       className={[
         "group/card absolute flex flex-col rounded-xl border transition-all duration-150",
-        editing ? "" : "select-none",
+        editing ? "" : "select-none cursor-grab active:cursor-grabbing",
         colorClass,
         selected
           ? multiSelected
@@ -272,7 +272,7 @@ export function TaskCanvasCard({
           ) : (
             <span
               data-card-title
-              className="min-w-0 flex-1 cursor-text line-clamp-3 text-[13px] font-semibold leading-snug text-slate-900"
+              className="max-w-full w-fit cursor-text line-clamp-3 text-[13px] font-semibold leading-snug text-slate-900"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); beginEdit(); }}
             >
