@@ -86,6 +86,32 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
 
   const sections: ShortcutSection[] = [
     {
+      title: "Canvas — Maus",
+      hint: "Auf dem leeren Arbeitsbereich bzw. auf Karten.",
+      items: [
+        { keys: "Ziehen (leer)", description: "Arbeitsbereich verschieben (Pan)" },
+        { keys: "Mittlere Maustaste / Leertaste + Ziehen", description: "Pan (Alternative)" },
+        { keys: "Shift + Ziehen (leer)", description: "Lasso: mehrere Karten auswählen" },
+        { keys: "Ziehen (Karte)", description: "Karte verschieben" },
+        { keys: "Klick auf Titel", description: "Titel bearbeiten" },
+        { keys: "Klick / Shift + Klick", description: "Karte auswählen / Mehrfachauswahl" },
+        { keys: "Doppelklick (Karte)", description: "In die Karte hinein (Unterebene)" },
+        { keys: "Doppelklick (leer)", description: "Neue Karte anlegen" },
+        { keys: "Mausrad", description: "Pan · Ctrl/Cmd + Rad = Zoom" },
+        { keys: "Ecken / Kanten", description: "Größe ändern · Drehgriff oben = rotieren" },
+        { keys: "Rechtsklick", description: "Kontextmenü" },
+      ],
+    },
+    {
+      title: "Canvas — Tastatur",
+      items: [
+        { keys: "Esc", description: "Auswahl / Verbindungsmodus aufheben" },
+        { keys: `${mod} + A`, description: "Alle Karten der Ebene auswählen" },
+        { keys: "Entf / Rücktaste", description: "Ausgewählten Pfeil löschen" },
+        { keys: "Leertaste (halten)", description: "Pan-Modus für Linksklick" },
+      ],
+    },
+    {
       title: "Allgemein",
       items: [
         { keys: `${mod} + Z`, description: "Rückgängig" },
@@ -93,7 +119,7 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
       ],
     },
     {
-      title: "Karten (Drill-down)",
+      title: "Karten (Listenansicht)",
       hint: "Karte zuerst per Klick oder Pfeiltasten fokussieren (blauer Ring).",
       items: [
         { keys: "↑ ↓", description: "Zwischen Karten in der aktuellen Ebene wechseln" },
@@ -111,7 +137,7 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
     },
     {
       title: "Titel bearbeiten",
-      hint: "Nur beim Anlegen einer neuen Karte. Bestehende Titel über die Detailansicht ändern.",
+      hint: "Beim Anlegen oder per Klick auf den Titel (Canvas).",
       items: [
         { keys: "Enter", description: "Titel übernehmen" },
         { keys: "Shift + Enter", description: "Titel übernehmen und Geschwisterkarte anlegen" },
@@ -127,7 +153,7 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
       ],
     },
     {
-      title: "Maus",
+      title: "Listenansicht — Maus",
       items: [
         { keys: "Klick", description: "Karte auswählen" },
         {
@@ -164,10 +190,10 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
       >
         <div className="shrink-0 border-b border-slate-100 px-5 py-4">
           <h2 id={titleId} className="text-sm font-semibold text-slate-900">
-            Kurzanleitung
+            Bedienung
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Die wichtigsten Tastaturkürzel für schnelles Arbeiten mit Karten.
+            Maus- und Tastaturbedienung für Canvas und Listenansicht.
           </p>
         </div>
 

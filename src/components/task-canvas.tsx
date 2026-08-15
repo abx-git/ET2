@@ -6,13 +6,16 @@ import { TaskCanvasCard } from "@/components/task-canvas-card";
 import { TaskConnectors } from "@/components/task-connectors";
 import { TaskDetailSidebar } from "@/components/task-detail-sidebar";
 import { CanvasGroupBox } from "@/components/canvas-group-box";
+import { KeyboardShortcutsHelpDialog } from "@/components/keyboard-shortcuts-help-dialog";
 import { contextChildren } from "@/lib/board-context";
 import { nodeMatchesBoardFilters } from "@/lib/board-filters";
 import { nodeHasCanvasPosition } from "@/lib/canvas-layout";
 import { isNodeInsideGroup } from "@/lib/canvas-group";
 import {
   DEFAULT_CANVAS_VIEWPORT,
+  fitViewportToBounds,
   screenToWorld,
+  unionWorldBounds,
   zoomAtPoint,
   ZOOM_STEP,
   type CanvasViewport,
@@ -92,10 +95,12 @@ export function TaskCanvas() {
   const [lasso, setLasso] = useState<LassoRect | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const spaceDown = useRef(false);
   const multiDrag = useRef<{ ox: number; oy: number } | null>(null);
   const lassoJustFinished = useRef(false);
+  const panMoved = useRef(false);
 
   const contextKids = useMemo(
     () => contextChildren(roots, contextNodeId),
@@ -146,8 +151,6 @@ export function TaskCanvas() {
     () => relationsForContext(relations, visibleIds),
     [relations, visibleIds],
   );
-
-  const selectedRelation = visibleRelations.find((r) => r.id === selectedRelationId) ?? null;
 
   // Check if a node is in the lasso selection area
   const isNodeInLasso = useCallback(
@@ -246,10 +249,16 @@ export function TaskCanvas() {
   const beginPan = useCallback(
     (clientX: number, clientY: number, vp: CanvasViewport) => {
       setPanning(true);
+      panMoved.current = false;
       panStart.current = { x: clientX, y: clientY, vx: vp.x, vy: vp.y };
     },
     [],
   );
+
+  const isCanvasBackgroundTarget = (target: EventTarget | null, currentTarget: EventTarget) => {
+    if (target === currentTarget) return true;
+    return target instanceof HTMLElement && target.classList.contains("et2-canvas-world");
+  };
 
   const handleCardConnect = useCallback(
     (nodeId: string) => {
@@ -268,6 +277,22 @@ export function TaskCanvas() {
     },
     [connectTasks, setRelationConnectMode, setRelationDraftSourceId],
   );
+
+  const fitAllCardsInView = useCallback(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    const rects = [
+      ...nodes.map((n) => taskCardRect(n)),
+      ...canvasGroups.map((g) => ({ x: g.x, y: g.y, w: g.width, h: g.height })),
+    ];
+    const bounds = unionWorldBounds(rects);
+    if (!bounds) {
+      setCanvasViewport({ ...DEFAULT_CANVAS_VIEWPORT });
+      return;
+    }
+    setCanvasViewport(fitViewportToBounds(bounds, width, height));
+  }, [nodes, canvasGroups, setCanvasViewport]);
 
   const handleCardSelect = useCallback(
     (nodeId: string, shiftKey: boolean) => {
@@ -365,6 +390,14 @@ export function TaskCanvas() {
         <button
           type="button"
           className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
+          title="Zoom und Position so wählen, dass alle Karten dieser Ebene sichtbar sind"
+          onClick={fitAllCardsInView}
+        >
+          Alles einpassen
+        </button>
+        <button
+          type="button"
+          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
           onClick={() => setCanvasViewport({ ...DEFAULT_CANVAS_VIEWPORT })}
         >
           Ansicht zurücksetzen
@@ -416,19 +449,31 @@ export function TaskCanvas() {
             {selectedCanvasNodeIds.length} Karten ausgewählt
           </span>
         )}
-        <span className="text-slate-400">
-          Leertaste+Ziehen = Pan · Doppelklick = hinein · Shift+Klick = Multi-Auswahl · Lasso = Bereich wählen
-          {selectedRelation ? " · Entf = Pfeil löschen" : ""}
-        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            title="Bedienung anzeigen"
+            aria-label="Bedienung anzeigen"
+            onClick={() => setHelpOpen(true)}
+          >
+            ?
+          </button>
+        </div>
       </div>
 
       <div
         ref={shellRef}
         className={[
           "relative min-h-0 flex-1 overflow-hidden bg-[var(--canvas)] bg-[radial-gradient(circle_at_1px_1px,var(--border)_1px,transparent_0)] bg-[length:24px_24px]",
-          spaceHeld || panning ? (panning ? "cursor-grabbing" : "cursor-grab") : "cursor-default",
+          spaceHeld || panning
+            ? panning
+              ? "cursor-grabbing"
+              : "cursor-grab"
+            : "cursor-grab",
         ].join(" ")}
         onPointerDown={(e) => {
+          const onBackground = isCanvasBackgroundTarget(e.target, e.currentTarget);
           // Middle-mouse or Space+left = Pan
           if (e.button === 1 || (e.button === 0 && spaceDown.current)) {
             e.preventDefault();
@@ -436,25 +481,33 @@ export function TaskCanvas() {
             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
             return;
           }
-          // Left click on background = start lasso selection
-          if (e.button === 0 && !spaceDown.current && (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("et2-canvas-world"))) {
+          if (e.button !== 0 || !onBackground) return;
+          // Shift+drag on empty area = lasso
+          if (e.shiftKey) {
             const startX = e.clientX;
             const startY = e.clientY;
             setLasso({ x1: startX, y1: startY, x2: startX, y2: startY });
             (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            return;
           }
+          // Drag on empty area = pan workspace
+          beginPan(e.clientX, e.clientY, canvasViewport);
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         }}
         onPointerMove={(e) => {
           if (panning) {
+            const dx = e.clientX - panStart.current.x;
+            const dy = e.clientY - panStart.current.y;
+            if (Math.abs(dx) + Math.abs(dy) > 3) panMoved.current = true;
             setCanvasViewport({
               ...canvasViewport,
-              x: panStart.current.vx + (e.clientX - panStart.current.x),
-              y: panStart.current.vy + (e.clientY - panStart.current.y),
+              x: panStart.current.vx + dx,
+              y: panStart.current.vy + dy,
             });
             return;
           }
           if (lasso) {
-            setLasso((prev) => prev ? { ...prev, x2: e.clientX, y2: e.clientY } : null);
+            setLasso((prev) => (prev ? { ...prev, x2: e.clientX, y2: e.clientY } : null));
           }
         }}
         onPointerUp={(e) => {
@@ -499,7 +552,7 @@ export function TaskCanvas() {
           } catch { /* ignore */ }
         }}
         onDoubleClick={(e) => {
-          if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains("et2-canvas-world")) {
+          if (!isCanvasBackgroundTarget(e.target, e.currentTarget)) {
             return;
           }
           const el = shellRef.current;
@@ -512,16 +565,17 @@ export function TaskCanvas() {
           setPendingTitleEditId(id);
         }}
         onClick={(e) => {
-          // Only clear selection if directly clicking background (not from lasso)
-          if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("et2-canvas-world")) {
-            if (!lasso && !lassoJustFinished.current) {
-              setSelectedCanvasNodeId(null);
-              setSelectedRelationId(null);
-              clearCanvasMultiSelect();
-              setSelectedGroupId(null);
-              setContextMenu(null);
-            }
+          // Only clear selection if directly clicking background (not from lasso / pan-drag)
+          if (!isCanvasBackgroundTarget(e.target, e.currentTarget)) return;
+          if (lasso || lassoJustFinished.current || panMoved.current) {
+            panMoved.current = false;
+            return;
           }
+          setSelectedCanvasNodeId(null);
+          setSelectedRelationId(null);
+          clearCanvasMultiSelect();
+          setSelectedGroupId(null);
+          setContextMenu(null);
         }}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -766,6 +820,7 @@ export function TaskCanvas() {
       </div>
       </div>
       <TaskDetailSidebar />
+      <KeyboardShortcutsHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );
 }

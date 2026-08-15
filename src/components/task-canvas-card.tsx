@@ -223,7 +223,7 @@ export function TaskCanvasCard({
         colorClass,
         selected
           ? multiSelected
-            ? "ring-2 ring-teal-400/70 ring-offset-2 shadow-xl"
+            ? "ring-[3px] ring-teal-400 ring-offset-2 shadow-[0_0_0_6px_rgba(45,212,191,0.35)] shadow-xl outline outline-2 outline-teal-600/80"
             : "ring-2 ring-teal-500 ring-offset-1 shadow-xl"
           : hovered
             ? "shadow-lg shadow-slate-900/10"
