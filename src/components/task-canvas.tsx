@@ -76,6 +76,7 @@ export function TaskCanvas() {
   const setRelationDraftSourceId = useTaskTreeStore((s) => s.setRelationDraftSourceId);
   const defaultRelationType = useTaskTreeStore((s) => s.defaultRelationType);
   const setDefaultRelationType = useTaskTreeStore((s) => s.setDefaultRelationType);
+  const applyOutlineDrag = useTaskTreeStore((s) => s.applyOutlineDrag);
   const hideCompletedTasks = useTaskTreeStore((s) => s.hideCompletedTasks);
   const filterTags = useTaskTreeStore((s) => s.filterTags);
   const filterExcludeTags = useTaskTreeStore((s) => s.filterExcludeTags);
@@ -96,6 +97,7 @@ export function TaskCanvas() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [nestHoverId, setNestHoverId] = useState<string | null>(null);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const spaceDown = useRef(false);
   const multiDrag = useRef<{ ox: number; oy: number } | null>(null);
@@ -276,6 +278,15 @@ export function TaskCanvas() {
       setRelationConnectMode(false);
     },
     [connectTasks, setRelationConnectMode, setRelationDraftSourceId],
+  );
+
+  const handleNestOnto = useCallback(
+    (activeId: string, targetId: string) => {
+      if (activeId === targetId) return;
+      applyOutlineDrag(activeId, { kind: "nest", targetId });
+      setNestHoverId(null);
+    },
+    [applyOutlineDrag],
   );
 
   const fitAllCardsInView = useCallback(() => {
@@ -646,6 +657,7 @@ export function TaskCanvas() {
               completedTag={completedTag}
               selected={selectedCanvasNodeId === node.id || selectedCanvasNodeIds.includes(node.id)}
               connectSource={relationDraftSourceId === node.id}
+              nestTarget={nestHoverId === node.id}
               zoom={canvasViewport.zoom}
               requestTitleEdit={pendingTitleEditId === node.id}
               onTitleEditConsumed={() => setPendingTitleEditId(null)}
@@ -655,6 +667,8 @@ export function TaskCanvas() {
               onResize={(patch) => resizeCanvasNode(node.id, patch)}
               onRotate={(r) => rotateCanvasNode(node.id, r)}
               onConnectHandle={() => handleCardConnect(node.id)}
+              onNestHoverChange={setNestHoverId}
+              onNestOnto={(targetId) => handleNestOnto(node.id, targetId)}
               onContextMenu={(e) => {
                 const el = shellRef.current;
                 if (!el) return;

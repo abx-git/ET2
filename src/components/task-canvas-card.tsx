@@ -14,8 +14,21 @@ import type { TaskNode } from "@/types/task-node";
 
 const MIN_WIDTH = 100;
 const MIN_HEIGHT = 60;
+const NEST_DRAG_THRESHOLD_PX = 6;
 
 type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+function canvasCardIdFromPoint(clientX: number, clientY: number, excludeId: string): string | null {
+  if (typeof document === "undefined") return null;
+  for (const el of document.elementsFromPoint(clientX, clientY)) {
+    if (!(el instanceof Element)) continue;
+    const host = el.closest("[data-canvas-card-id]");
+    if (!host) continue;
+    const id = host.getAttribute("data-canvas-card-id");
+    if (id && id !== excludeId) return id;
+  }
+  return null;
+}
 
 const HANDLE_POSITIONS: Record<ResizeHandle, string> = {
   n: "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize",
@@ -35,6 +48,8 @@ export interface TaskCanvasCardProps {
   connectSource: boolean;
   dimmed?: boolean;
   multiSelected?: boolean;
+  /** True while another card is dragged over this one (nest drop). */
+  nestTarget?: boolean;
   onSelect: (shiftKey?: boolean) => void;
   onDrill: () => void;
   onMove: (x: number, y: number, delta?: { dx: number; dy: number }) => void;
@@ -42,6 +57,10 @@ export interface TaskCanvasCardProps {
   onRotate: (rotation: number) => void;
   onConnectHandle: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  /** While dragging: card under pointer that would receive a nest drop (or null). */
+  onNestHoverChange?: (targetId: string | null) => void;
+  /** On drag end over another card: nest this card under targetId. */
+  onNestOnto?: (targetId: string) => void;
   zoom: number;
   requestTitleEdit?: boolean;
   onTitleEditConsumed?: () => void;
@@ -54,6 +73,7 @@ export function TaskCanvasCard({
   connectSource,
   dimmed,
   multiSelected,
+  nestTarget,
   onSelect,
   onDrill,
   onMove,
@@ -61,12 +81,22 @@ export function TaskCanvasCard({
   onRotate,
   onConnectHandle,
   onContextMenu,
+  onNestHoverChange,
+  onNestOnto,
   zoom,
   requestTitleEdit,
   onTitleEditConsumed,
 }: TaskCanvasCardProps) {
   const rect = taskCardRect(node);
-  const drag = useRef<{ ox: number; oy: number; sx: number; sy: number; lastDx: number; lastDy: number } | null>(null);
+  const drag = useRef<{
+    ox: number;
+    oy: number;
+    sx: number;
+    sy: number;
+    lastDx: number;
+    lastDy: number;
+    moved: boolean;
+  } | null>(null);
   const editingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
@@ -217,6 +247,7 @@ export function TaskCanvasCard({
 
   return (
     <div
+      data-canvas-card-id={node.id}
       className={[
         "group/card absolute flex flex-col rounded-xl border transition-all duration-150",
         editing ? "" : "select-none cursor-grab active:cursor-grabbing",
@@ -229,6 +260,7 @@ export function TaskCanvasCard({
             ? "shadow-lg shadow-slate-900/10"
             : "shadow-md shadow-slate-900/5",
         connectSource ? "ring-2 ring-amber-400 shadow-xl" : "",
+        nestTarget ? "ring-2 ring-violet-500 ring-offset-2 shadow-xl shadow-violet-500/30 scale-[1.02]" : "",
         done ? "opacity-50 saturate-50" : "",
         dimmed ? "opacity-25" : "",
       ]
@@ -241,7 +273,7 @@ export function TaskCanvasCard({
         height: rect.h,
         transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
         transformOrigin: "center center",
-        zIndex: selected || connectSource || editing ? 20 : hovered ? 18 : 15,
+        zIndex: selected || connectSource || editing || nestTarget ? 20 : hovered ? 18 : 15,
       }}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => { if (!drag.current) setHovered(false); }}
@@ -251,15 +283,28 @@ export function TaskCanvasCard({
         if (editing) return;
         onSelect(e.shiftKey);
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        drag.current = { ox: e.clientX, oy: e.clientY, sx: rect.x, sy: rect.y, lastDx: 0, lastDy: 0 };
+        drag.current = {
+          ox: e.clientX,
+          oy: e.clientY,
+          sx: rect.x,
+          sy: rect.y,
+          lastDx: 0,
+          lastDy: 0,
+          moved: false,
+        };
       }}
       onClick={(e) => e.stopPropagation()}
       onPointerMove={(e) => {
         if (!drag.current) return;
         if (editing) return;
         e.stopPropagation();
-        const dx = (e.clientX - drag.current.ox) / zoom;
-        const dy = (e.clientY - drag.current.oy) / zoom;
+        const dxPx = e.clientX - drag.current.ox;
+        const dyPx = e.clientY - drag.current.oy;
+        if (!drag.current.moved && Math.abs(dxPx) + Math.abs(dyPx) >= NEST_DRAG_THRESHOLD_PX) {
+          drag.current.moved = true;
+        }
+        const dx = dxPx / zoom;
+        const dy = dyPx / zoom;
         if (multiSelected) {
           const incrementDx = dx - drag.current.lastDx;
           const incrementDy = dy - drag.current.lastDy;
@@ -269,10 +314,22 @@ export function TaskCanvasCard({
         } else {
           onMove(drag.current.sx + dx, drag.current.sy + dy);
         }
+        if (drag.current.moved) {
+          onNestHoverChange?.(canvasCardIdFromPoint(e.clientX, e.clientY, node.id));
+        }
       }}
       onPointerUp={(e) => {
+        const state = drag.current;
         drag.current = null;
         try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* */ }
+        onNestHoverChange?.(null);
+        if (!state?.moved || editing) return;
+        const targetId = canvasCardIdFromPoint(e.clientX, e.clientY, node.id);
+        if (targetId) onNestOnto?.(targetId);
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+        onNestHoverChange?.(null);
       }}
       onDoubleClick={(e) => {
         e.stopPropagation();

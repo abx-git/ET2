@@ -922,6 +922,12 @@ export const useTaskTreeStore = create<TaskTreeState>()(
       return {
         roots: nextRoots,
         pathIds: nextPath,
+        relations: sanitizeRelations(nextRoots, s.relations),
+        selectedCanvasNodeId:
+          drop.kind === "nest" && s.selectedCanvasNodeId === activeId
+            ? null
+            : s.selectedCanvasNodeId,
+        selectedCanvasNodeIds: s.selectedCanvasNodeIds.filter((id) => id !== activeId),
         ...syncActiveContext(contextByPane, s.activePane),
       };
     });

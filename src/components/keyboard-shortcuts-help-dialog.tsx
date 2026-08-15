@@ -93,6 +93,7 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
         { keys: "Mittlere Maustaste / Leertaste + Ziehen", description: "Pan (Alternative)" },
         { keys: "Shift + Ziehen (leer)", description: "Lasso: mehrere Karten auswählen" },
         { keys: "Ziehen (Karte)", description: "Karte verschieben" },
+        { keys: "Karte auf Karte legen", description: "Als Unterkarte einhängen (Nest)" },
         { keys: "Klick auf Titel", description: "Titel bearbeiten" },
         { keys: "Klick / Shift + Klick", description: "Karte auswählen / Mehrfachauswahl" },
         { keys: "Doppelklick (Karte)", description: "In die Karte hinein (Unterebene)" },
