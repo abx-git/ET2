@@ -348,10 +348,11 @@ export function TaskCanvas() {
           Verbinden
         </button>
         <label className="flex items-center gap-1">
-          Typ
+          Neuer Pfeil
           <select
             className="rounded border border-slate-300 bg-white px-1 py-0.5"
             value={defaultRelationType}
+            title="Typ für neu gezogene Verbindungen (Richtung: Quelle → Ziel)"
             onChange={(e) => setDefaultRelationType(e.target.value as TaskRelationType)}
           >
             {TASK_RELATION_TYPES.map((t) => (

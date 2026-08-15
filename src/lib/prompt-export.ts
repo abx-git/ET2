@@ -1,8 +1,18 @@
 import type { TaskNode } from "@/types/task-node";
 import type { TaskRelation } from "@/types/task-relation";
-import { TASK_RELATION_TYPE_LABELS } from "@/types/task-relation";
+import { relationArrowLabel, TASK_RELATION_TYPE_LABELS } from "@/types/task-relation";
 import { isNoteNode } from "@/lib/tree-node-kind";
 import { taskLinkHref } from "@/lib/task-link";
+
+function formatRelationLine(srcTitle: string, tgtTitle: string, rel: TaskRelation): string {
+  const arrow = `${srcTitle} → ${tgtTitle}`;
+  const label = relationArrowLabel(rel);
+  if (!label) return `- ${arrow}`;
+  if (rel.label?.trim() && rel.type !== "untyped") {
+    return `- ${arrow} [${TASK_RELATION_TYPE_LABELS[rel.type]}: ${rel.label.trim()}]`;
+  }
+  return `- ${arrow} [${label}]`;
+}
 
 /**
  * Exportiert alle Karten einer Canvas-Ansicht als strukturierten Text-Prompt.
@@ -79,9 +89,7 @@ export function exportCanvasAsPrompt(
       if (!src || !tgt) continue;
       const srcLabel = src.title || "(Ohne Titel)";
       const tgtLabel = tgt.title || "(Ohne Titel)";
-      const typeLabel = TASK_RELATION_TYPE_LABELS[rel.type] ?? rel.type;
-      const arrow = `${srcLabel} → ${tgtLabel}`;
-      lines.push(`- ${arrow} [${typeLabel}${rel.label ? `: ${rel.label}` : ""}]`);
+      lines.push(formatRelationLine(srcLabel, tgtLabel, rel));
     }
     lines.push("");
   }
@@ -147,8 +155,12 @@ export function exportTreeAsPrompt(
       const src = nodeMap.get(rel.sourceId);
       const tgt = nodeMap.get(rel.targetId);
       if (!src || !tgt) continue;
-      const typeLabel = TASK_RELATION_TYPE_LABELS[rel.type] ?? rel.type;
-      lines.push(`- ${src.title || "?"} → ${tgt.title || "?"} [${typeLabel}]`);
+      const typeLabel = relationArrowLabel(rel) || TASK_RELATION_TYPE_LABELS[rel.type];
+      lines.push(
+        typeLabel
+          ? `- ${src.title || "?"} → ${tgt.title || "?"} [${typeLabel}]`
+          : `- ${src.title || "?"} → ${tgt.title || "?"}`,
+      );
     }
   }
 

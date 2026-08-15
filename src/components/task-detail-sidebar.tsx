@@ -140,7 +140,11 @@ export function TaskDetailSidebar() {
                 id="et2-rel-label"
                 className={fieldClass}
                 value={relation.label ?? ""}
-                placeholder={TASK_RELATION_TYPE_LABELS[relation.type]}
+                placeholder={
+                  relation.type === "untyped"
+                    ? "Optionale Beschriftung"
+                    : TASK_RELATION_TYPE_LABELS[relation.type]
+                }
                 onChange={(e) => updateRelation(relation.id, { label: e.target.value })}
               />
             </div>

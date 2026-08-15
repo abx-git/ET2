@@ -1,4 +1,8 @@
-import { isTaskRelationType, type TaskRelation, type TaskRelationType } from "@/types/task-relation";
+import {
+  normalizeTaskRelationType,
+  type TaskRelation,
+  type TaskRelationType,
+} from "@/types/task-relation";
 import { findDirectParentId, findNodeById } from "@/lib/tree-utils";
 import type { TaskNode } from "@/types/task-node";
 import { generateUniqueTaskIdFromTaken } from "@/lib/task-id";
@@ -17,13 +21,14 @@ export function parseTaskRelation(raw: unknown, path: string): TaskRelation {
   if (typeof o.id !== "string" || !o.id.trim()) throw new Error(`${path}.id erwartet`);
   if (typeof o.sourceId !== "string" || !o.sourceId.trim()) throw new Error(`${path}.sourceId erwartet`);
   if (typeof o.targetId !== "string" || !o.targetId.trim()) throw new Error(`${path}.targetId erwartet`);
-  if (!isTaskRelationType(o.type)) throw new Error(`${path}.type ungültig`);
+  const type = normalizeTaskRelationType(o.type);
+  if (!type) throw new Error(`${path}.type ungültig`);
   if (o.label !== undefined && typeof o.label !== "string") throw new Error(`${path}.label erwartet`);
   return {
     id: o.id.trim(),
     sourceId: o.sourceId.trim(),
     targetId: o.targetId.trim(),
-    type: o.type,
+    type,
     ...(typeof o.label === "string" && o.label.trim() ? { label: o.label.trim() } : {}),
   };
 }
@@ -86,11 +91,24 @@ export function canConnectSiblings(
 
 export function relationStroke(type: TaskRelationType): { color: string; dashed?: boolean } {
   switch (type) {
-    case "temporal":
-      return { color: "#0f766e" };
-    case "organizational":
-      return { color: "#1d4ed8", dashed: true };
-    default:
+    case "untyped":
       return { color: "#64748b" };
+    case "precedes":
+      return { color: "#0f766e" };
+    case "requires":
+      return { color: "#b45309" };
+    case "blocks":
+      return { color: "#be123c" };
+    case "informs":
+      return { color: "#0369a1", dashed: true };
+    case "assigns":
+      return { color: "#1d4ed8", dashed: true };
+    case "supports":
+      return { color: "#7c3aed" };
+    default: {
+      const _exhaustive: never = type;
+      void _exhaustive;
+      return { color: "#64748b" };
+    }
   }
 }

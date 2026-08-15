@@ -2,9 +2,8 @@
 
 import { relationAnchors } from "@/lib/connector-geometry";
 import { relationStroke } from "@/lib/task-relations";
-import { TASK_RELATION_TYPE_LABELS } from "@/types/task-relation";
+import { relationArrowLabel, type TaskRelation } from "@/types/task-relation";
 import type { TaskNode } from "@/types/task-node";
-import type { TaskRelation } from "@/types/task-relation";
 
 export interface TaskConnectorsProps {
   nodes: TaskNode[];
@@ -47,6 +46,7 @@ export function TaskConnectors({
         const midY = (start.y + end.y) / 2;
         const selected = rel.id === selectedRelationId;
         const stroke = relationStroke(rel.type);
+        const label = relationArrowLabel(rel);
         return (
           <g key={rel.id}>
             <line
@@ -73,14 +73,16 @@ export function TaskConnectors({
               markerEnd={selected ? "url(#et2-arrowhead-selected)" : "url(#et2-arrowhead)"}
               className="pointer-events-none"
             />
-            <text
-              x={midX}
-              y={midY - 8}
-              textAnchor="middle"
-              className="pointer-events-none fill-slate-500 text-[10px]"
-            >
-              {rel.label?.trim() || TASK_RELATION_TYPE_LABELS[rel.type]}
-            </text>
+            {label ? (
+              <text
+                x={midX}
+                y={midY - 8}
+                textAnchor="middle"
+                className="pointer-events-none fill-slate-500 text-[10px]"
+              >
+                {label}
+              </text>
+            ) : null}
           </g>
         );
       })}

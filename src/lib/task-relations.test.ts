@@ -53,9 +53,9 @@ describe("task relations", () => {
       card("r2", "Root2"),
     ];
     const relations: TaskRelation[] = [
-      { id: "rel1", sourceId: "c1", targetId: "c2", type: "temporal" },
-      { id: "rel2", sourceId: "c1", targetId: "r2", type: "other" },
-      { id: "rel3", sourceId: "missing", targetId: "c2", type: "other" },
+      { id: "rel1", sourceId: "c1", targetId: "c2", type: "precedes" },
+      { id: "rel2", sourceId: "c1", targetId: "r2", type: "untyped" },
+      { id: "rel3", sourceId: "missing", targetId: "c2", type: "untyped" },
     ];
     const clean = sanitizeRelations(roots, relations);
     expect(clean.map((r) => r.id)).toEqual(["rel1"]);
@@ -69,7 +69,7 @@ describe("task relations", () => {
       { ...card("b", "Beta"), x: 400, y: 80 },
     ];
     const relations: TaskRelation[] = [
-      { id: "r1", sourceId: "a", targetId: "b", type: "organizational", label: "meldet" },
+      { id: "r1", sourceId: "a", targetId: "b", type: "assigns", label: "meldet" },
     ];
     const snap = buildBoardSnapshot(
       roots,
@@ -97,14 +97,23 @@ describe("task relations", () => {
 
     const text = JSON.stringify(snap);
     const doc = parseExportedDocument(text) as BoardSnapshotV1;
-    expect(doc.relations?.[0]?.type).toBe("organizational");
+    expect(doc.relations?.[0]?.type).toBe("assigns");
     const restored = doc.roots.map(taskNodeFromJson);
     expect(restored[0]?.x).toBe(100);
     expect(restored[1]?.y).toBe(80);
   });
 
-  it("parses relation arrays defensively", () => {
-    expect(parseTaskRelations([{ id: "1", sourceId: "a", targetId: "b", type: "temporal" }])).toHaveLength(1);
+  it("parses relation arrays defensively and migrates legacy types", () => {
+    expect(parseTaskRelations([{ id: "1", sourceId: "a", targetId: "b", type: "precedes" }])).toHaveLength(1);
+    expect(parseTaskRelations([{ id: "1", sourceId: "a", targetId: "b", type: "temporal" }])[0]?.type).toBe(
+      "precedes",
+    );
+    expect(parseTaskRelations([{ id: "1", sourceId: "a", targetId: "b", type: "organizational" }])[0]?.type).toBe(
+      "assigns",
+    );
+    expect(parseTaskRelations([{ id: "1", sourceId: "a", targetId: "b", type: "other" }])[0]?.type).toBe(
+      "untyped",
+    );
     expect(parseTaskRelations([{ id: "1" }])).toHaveLength(0);
     expect(parseTaskRelations("nope")).toHaveLength(0);
   });

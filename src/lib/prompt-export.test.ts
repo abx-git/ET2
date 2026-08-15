@@ -41,12 +41,12 @@ describe("exportCanvasAsPrompt", () => {
   it("includes relations", () => {
     const nodes = [card("1", "Source"), card("2", "Target")];
     const relations: TaskRelation[] = [
-      { id: "r1", sourceId: "1", targetId: "2", type: "temporal" },
+      { id: "r1", sourceId: "1", targetId: "2", type: "precedes" },
     ];
     const result = exportCanvasAsPrompt(nodes, relations);
     expect(result).toContain("Verbindungen (1)");
     expect(result).toContain("Source → Target");
-    expect(result).toContain("Zeitlich");
+    expect(result).toContain("geht voraus");
   });
 
   it("renders notes with markdown", () => {

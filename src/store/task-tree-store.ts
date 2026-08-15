@@ -519,7 +519,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
   selectedRelationId: null,
   selectedCanvasNodeId: null,
   selectedCanvasNodeIds: [] as string[],
-  defaultRelationType: "temporal",
+  defaultRelationType: "untyped",
   pathIds: [],
   collapsedIds: [],
   cardCollapsedIds: [],

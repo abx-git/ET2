@@ -525,7 +525,15 @@
     },
     "TaskRelationType": {
       "type": "string",
+      "description": "Semantik Quelle→Ziel. Legacy: temporal→precedes, organizational→assigns, other→untyped.",
       "enum": [
+        "untyped",
+        "precedes",
+        "requires",
+        "blocks",
+        "informs",
+        "assigns",
+        "supports",
         "temporal",
         "organizational",
         "other"
