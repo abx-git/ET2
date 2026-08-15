@@ -347,6 +347,12 @@ export interface TaskTreeState {
   /** Karte rotieren (Grad). */
   rotateCanvasNode: (nodeId: string, rotation: number) => void;
   connectTasks: (sourceId: string, targetId: string, type?: TaskRelationType) => string | null;
+  /** Pfeil-Ende umhängen: `end` ist welcher Anker (Quelle oder Ziel) neu gesetzt wird. */
+  reconnectRelation: (
+    relationId: string,
+    end: "source" | "target",
+    newNodeId: string,
+  ) => boolean;
   disconnectRelation: (relationId: string) => void;
   updateRelation: (relationId: string, patch: Partial<Pick<TaskRelation, "type" | "label">>) => void;
 
@@ -1167,6 +1173,38 @@ export const useTaskTreeStore = create<TaskTreeState>()(
       relations: (s.relations ?? []).filter((r) => r.id !== relationId),
       selectedRelationId: s.selectedRelationId === relationId ? null : s.selectedRelationId,
     }));
+  },
+
+  reconnectRelation: (relationId, end, newNodeId) => {
+    const state = get();
+    const rel = (state.relations ?? []).find((r) => r.id === relationId);
+    if (!rel) return false;
+    const nextSourceId = end === "source" ? newNodeId : rel.sourceId;
+    const nextTargetId = end === "target" ? newNodeId : rel.targetId;
+    if (nextSourceId === rel.sourceId && nextTargetId === rel.targetId) return true;
+    if (!canConnectSiblings(state.roots, nextSourceId, nextTargetId)) return false;
+    if (
+      (state.relations ?? []).some(
+        (r) =>
+          r.id !== relationId &&
+          r.sourceId === nextSourceId &&
+          r.targetId === nextTargetId,
+      )
+    ) {
+      return false;
+    }
+    set({
+      relations: sanitizeRelations(
+        state.roots,
+        (state.relations ?? []).map((r) =>
+          r.id === relationId
+            ? { ...r, sourceId: nextSourceId, targetId: nextTargetId }
+            : r,
+        ),
+      ),
+      selectedRelationId: relationId,
+    });
+    return true;
   },
 
   updateRelation: (relationId, patch) => {

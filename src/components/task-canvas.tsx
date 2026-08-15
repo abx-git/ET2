@@ -62,6 +62,7 @@ export function TaskCanvas() {
   const removeCard = useTaskTreeStore((s) => s.removeCard);
   const moveNodesToClipboard = useTaskTreeStore((s) => s.moveNodesToClipboard);
   const connectTasks = useTaskTreeStore((s) => s.connectTasks);
+  const reconnectRelation = useTaskTreeStore((s) => s.reconnectRelation);
   const disconnectRelation = useTaskTreeStore((s) => s.disconnectRelation);
   const selectedRelationId = useTaskTreeStore((s) => s.selectedRelationId);
   const setSelectedRelationId = useTaskTreeStore((s) => s.setSelectedRelationId);
@@ -644,11 +645,26 @@ export function TaskCanvas() {
           <TaskConnectors
             nodes={nodes}
             relations={visibleRelations}
+            roots={roots}
             selectedRelationId={selectedRelationId}
             relationDraftSourceId={relationDraftSourceId}
+            zoom={canvasViewport.zoom}
+            clientToWorld={(clientX, clientY) => {
+              const el = shellRef.current;
+              if (!el) return { x: 0, y: 0 };
+              return screenToWorld(
+                useTaskTreeStore.getState().canvasViewport,
+                clientX,
+                clientY,
+                el.getBoundingClientRect(),
+              );
+            }}
             onSelectRelation={(id) => {
               setSelectedRelationId(id);
             }}
+            onReconnectRelation={(relationId, end, newNodeId) =>
+              reconnectRelation(relationId, end, newNodeId)
+            }
           />
           {nodes.map((node) => (
             <TaskCanvasCard

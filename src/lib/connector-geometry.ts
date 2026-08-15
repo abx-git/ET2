@@ -61,3 +61,33 @@ export function relationAnchors(
     end: rectEdgePoint(tRect, tc, sc),
   };
 }
+
+/** Top-most card whose axis-aligned rect contains the world point (last in `nodes` wins). */
+export function findCardAtWorldPoint(
+  nodes: readonly TaskNode[],
+  worldX: number,
+  worldY: number,
+  excludeIds?: ReadonlySet<string> | readonly string[],
+): TaskNode | null {
+  const excluded =
+    excludeIds == null
+      ? null
+      : excludeIds instanceof Set
+        ? excludeIds
+        : new Set(excludeIds);
+  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+    const node = nodes[i];
+    if (!node) continue;
+    if (excluded?.has(node.id)) continue;
+    const r = taskCardRect(node);
+    if (
+      worldX >= r.x &&
+      worldX <= r.x + r.w &&
+      worldY >= r.y &&
+      worldY <= r.y + r.h
+    ) {
+      return node;
+    }
+  }
+  return null;
+}

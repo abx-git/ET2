@@ -100,6 +100,8 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
         { keys: "Doppelklick (leer)", description: "Neue Karte anlegen" },
         { keys: "Mausrad", description: "Pan · Ctrl/Cmd + Rad = Zoom" },
         { keys: "Ecken / Kanten", description: "Größe ändern · Drehgriff oben = rotieren" },
+        { keys: "Klick auf Pfeil", description: "Pfeil auswählen · Ansatzpunkte an den Karten" },
+        { keys: "Ansatzpunkt ziehen", description: "Pfeil-Ende umhängen (auf andere Geschwisterkarte)" },
         { keys: "Rechtsklick", description: "Kontextmenü" },
       ],
     },
