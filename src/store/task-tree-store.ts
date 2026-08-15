@@ -71,7 +71,8 @@ import {
 } from "@/lib/task-tags";
 import type { NoteEditableFields, TaskCardEditableFields, TaskNode } from "@/types/task-node";
 import type { TaskRelation, TaskRelationType } from "@/types/task-relation";
-import { createBlankCardNode, createBlankNoteNode } from "@/lib/tree-node-kind";
+import type { SymbolType } from "@/lib/diagram-symbol";
+import { createBlankCardNode, createBlankNoteNode, createBlankSymbolNode } from "@/lib/tree-node-kind";
 import {
   canConnectSiblings,
   createRelationId,
@@ -364,6 +365,8 @@ export interface TaskTreeState {
   addNoteAfter: (parentId: string | null) => string;
   /** Neue Geschwisternotiz direkt unter `afterNodeId`. */
   addNoteAfterSibling: (afterNodeId: string) => string | null;
+  /** Neues Canvas-Symbol am Ende der Geschwisterliste unter `parentId`. */
+  addSymbolAfter: (parentId: string | null, symbolType: SymbolType) => string;
   updateCard: (nodeId: string, fields: Partial<TaskCardEditableFields>) => void;
   updateNote: (nodeId: string, fields: Partial<NoteEditableFields>) => void;
   /** Karte in Markdown-Notiz umwandeln (Beschreibung → Markdown). */
@@ -459,6 +462,18 @@ function insertNoteAtIndex(
 ): string {
   const id = generateUniqueTaskId(get().roots);
   const newNode = createBlankNoteNode(id);
+  return insertNodeAtIndex(set, get, parentId, index, newNode);
+}
+
+function insertSymbolAtIndex(
+  set: (fn: (s: TaskTreeState) => Partial<TaskTreeState>) => void,
+  get: () => TaskTreeState,
+  parentId: string | null,
+  index: number,
+  symbolType: SymbolType,
+): string {
+  const id = generateUniqueTaskId(get().roots);
+  const newNode = createBlankSymbolNode(id, symbolType);
   return insertNodeAtIndex(set, get, parentId, index, newNode);
 }
 
@@ -1126,11 +1141,14 @@ export const useTaskTreeStore = create<TaskTreeState>()(
 
   resizeCanvasNode: (nodeId, patch) => {
     set((s) => {
+      const node = findNodeById(s.roots, nodeId);
+      const minW = node?.kind === "symbol" ? 40 : 100;
+      const minH = node?.kind === "symbol" ? 40 : 60;
       const nextRoots = updateNodeFields(s.roots, nodeId, {
         x: Math.round(patch.x),
         y: Math.round(patch.y),
-        width: Math.max(100, Math.round(patch.width)),
-        height: Math.max(60, Math.round(patch.height)),
+        width: Math.max(minW, Math.round(patch.width)),
+        height: Math.max(minH, Math.round(patch.height)),
       });
       return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
     });
@@ -1253,6 +1271,11 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     return insertNoteAtIndex(set, get, parentId, index);
   },
 
+  addSymbolAfter: (parentId, symbolType) => {
+    const index = getSiblingsList(get().roots, parentId).length;
+    return insertSymbolAtIndex(set, get, parentId, index, symbolType);
+  },
+
   updateCard: (nodeId, fields) => {
     set((s) => {
       const nextRoots = refreshCalculatedEffortsInTree(
@@ -1276,7 +1299,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
   convertCardToNote: (nodeId) => {
     set((s) => {
       const node = findNodeById(s.roots, nodeId);
-      if (!node || node.kind === "note") return {};
+      if (!node || node.kind === "note" || node.kind === "symbol") return {};
       const nextRoots = convertCardToNoteInForest(s.roots, nodeId);
       if (nextRoots === s.roots) return {};
       return {

@@ -3,6 +3,7 @@
  */
 
 import { isTaskMarkedDone } from "@/lib/task-tags";
+import { isSymbolNode } from "@/lib/tree-node-kind";
 import type { TaskNode } from "@/types/task-node";
 
 export interface OutlineRow {
@@ -45,9 +46,10 @@ function walkForest(
   collapsedIds: ReadonlySet<string>,
   out: BoardOutlineRow[],
 ): void {
-  const visible = hideCompleted
+  const visible = (hideCompleted
     ? nodes.filter((n) => !isTaskMarkedDone(n, completedTag))
-    : nodes;
+    : nodes
+  ).filter((n) => !isSymbolNode(n));
   visible.forEach((node, siblingIndex) => {
     out.push({
       node,

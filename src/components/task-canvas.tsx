@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TaskCanvasCard } from "@/components/task-canvas-card";
+import { TaskCanvasSymbol } from "@/components/task-canvas-symbol";
 import { TaskConnectors } from "@/components/task-connectors";
 import { TaskDetailSidebar } from "@/components/task-detail-sidebar";
 import { CanvasGroupBox } from "@/components/canvas-group-box";
@@ -21,10 +22,16 @@ import {
   type CanvasViewport,
 } from "@/lib/canvas-viewport";
 import { taskCardRect } from "@/lib/connector-geometry";
+import {
+  defaultSymbolSize,
+  listSymbolTypesByGroup,
+  SYMBOL_GROUP_LABELS,
+  type SymbolType,
+} from "@/lib/diagram-symbol";
 import { exportCanvasAsPrompt } from "@/lib/prompt-export";
 import { relationsForContext } from "@/lib/task-relations";
 import { isTaskMarkedDone } from "@/lib/task-tags";
-import { isNoteNode } from "@/lib/tree-node-kind";
+import { isNoteNode, isSymbolNode } from "@/lib/tree-node-kind";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import {
   TASK_RELATION_TYPE_LABELS,
@@ -59,6 +66,7 @@ export function TaskCanvas() {
   const drillIntoNode = useTaskTreeStore((s) => s.drillIntoNode);
   const addCardAfter = useTaskTreeStore((s) => s.addCardAfter);
   const addNoteAfter = useTaskTreeStore((s) => s.addNoteAfter);
+  const addSymbolAfter = useTaskTreeStore((s) => s.addSymbolAfter);
   const removeCard = useTaskTreeStore((s) => s.removeCard);
   const moveNodesToClipboard = useTaskTreeStore((s) => s.moveNodesToClipboard);
   const connectTasks = useTaskTreeStore((s) => s.connectTasks);
@@ -99,6 +107,9 @@ export function TaskCanvas() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [nestHoverId, setNestHoverId] = useState<string | null>(null);
+  const [symbolPaletteOpen, setSymbolPaletteOpen] = useState(false);
+  const [placingSymbolType, setPlacingSymbolType] = useState<SymbolType | null>(null);
+  const [contextSymbolGroup, setContextSymbolGroup] = useState<"useCase" | "flowchart" | null>(null);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const spaceDown = useRef(false);
   const multiDrag = useRef<{ ox: number; oy: number } | null>(null);
@@ -106,7 +117,7 @@ export function TaskCanvas() {
   const panMoved = useRef(false);
 
   const contextKids = useMemo(
-    () => contextChildren(roots, contextNodeId),
+    () => contextChildren(roots, contextNodeId, { includeSymbols: true }),
     [roots, contextNodeId],
   );
   const needsCanvasLayout = contextKids.some((n) => !nodeHasCanvasPosition(n));
@@ -135,6 +146,7 @@ export function TaskCanvas() {
 
   const nodes = useMemo(() => {
     return contextKids.filter((n) => {
+      if (isSymbolNode(n)) return true;
       if (hideCompletedTasks && isTaskMarkedDone(n, completedTag)) return false;
       if (!filtersActive) return true;
       if (isNoteNode(n)) return filterExcludeTags.length === 0;
@@ -185,6 +197,9 @@ export function TaskCanvas() {
         setSelectedCanvasNodeId(null);
         clearCanvasMultiSelect();
         setContextMenu(null);
+        setPlacingSymbolType(null);
+        setSymbolPaletteOpen(false);
+        setContextSymbolGroup(null);
       }
       if ((e.key === "Delete" || e.key === "Backspace") && selectedRelationId) {
         const t = e.target as HTMLElement | null;
@@ -249,6 +264,18 @@ export function TaskCanvas() {
     return () => el.removeEventListener("wheel", onWheel);
   }, [setCanvasViewport]);
 
+  const placeSymbolAtWorld = useCallback(
+    (symbolType: SymbolType, worldX: number, worldY: number) => {
+      const size = defaultSymbolSize(symbolType);
+      const id = addSymbolAfter(contextNodeId, symbolType);
+      moveCanvasNode(id, worldX - size.width / 2, worldY - size.height / 2);
+      setSelectedCanvasNodeId(id);
+      setPendingTitleEditId(id);
+      return id;
+    },
+    [addSymbolAfter, contextNodeId, moveCanvasNode, setSelectedCanvasNodeId],
+  );
+
   const beginPan = useCallback(
     (clientX: number, clientY: number, vp: CanvasViewport) => {
       setPanning(true);
@@ -284,10 +311,12 @@ export function TaskCanvas() {
   const handleNestOnto = useCallback(
     (activeId: string, targetId: string) => {
       if (activeId === targetId) return;
+      const target = nodes.find((n) => n.id === targetId);
+      if (target && isSymbolNode(target)) return;
       applyOutlineDrag(activeId, { kind: "nest", targetId });
       setNestHoverId(null);
     },
-    [applyOutlineDrag],
+    [applyOutlineDrag, nodes],
   );
 
   const fitAllCardsInView = useCallback(() => {
@@ -456,6 +485,66 @@ export function TaskCanvas() {
         >
           + Gruppe
         </button>
+        <div className="relative">
+          <button
+            type="button"
+            className={[
+              "rounded border px-2 py-1",
+              placingSymbolType || symbolPaletteOpen
+                ? "border-violet-500 bg-violet-50 text-violet-900"
+                : "border-slate-300 bg-white hover:bg-slate-100",
+            ].join(" ")}
+            title="Ablaufplan- und Use-Case-Symbole (nur Canvas)"
+            onClick={() => setSymbolPaletteOpen((o) => !o)}
+          >
+            Symbole{placingSymbolType ? "…" : ""}
+          </button>
+          {symbolPaletteOpen ? (
+            <div className="absolute left-0 top-full z-40 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+              {(["useCase", "flowchart"] as const).map((group) => (
+                <div key={group} className="mb-2 last:mb-0">
+                  <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    {SYMBOL_GROUP_LABELS[group]}
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    {listSymbolTypesByGroup(group).map((def) => (
+                      <button
+                        key={def.id}
+                        type="button"
+                        className={[
+                          "rounded px-2 py-1.5 text-left text-xs hover:bg-slate-100",
+                          placingSymbolType === def.id ? "bg-violet-50 text-violet-900" : "text-slate-800",
+                        ].join(" ")}
+                        onClick={() => {
+                          setPlacingSymbolType(def.id);
+                          setSymbolPaletteOpen(false);
+                          setRelationConnectMode(false);
+                          setRelationDraftSourceId(null);
+                        }}
+                      >
+                        {def.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {placingSymbolType ? (
+                <button
+                  type="button"
+                  className="mt-1 w-full rounded px-2 py-1 text-left text-[11px] text-slate-500 hover:bg-slate-50"
+                  onClick={() => setPlacingSymbolType(null)}
+                >
+                  Platzieren abbrechen
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        {placingSymbolType ? (
+          <span className="rounded bg-violet-100 px-2 py-0.5 text-violet-900">
+            Klick auf Fläche: {listSymbolTypesByGroup("useCase").concat(listSymbolTypesByGroup("flowchart")).find((d) => d.id === placingSymbolType)?.label}
+          </span>
+        ) : null}
         {selectedCanvasNodeIds.length > 1 && (
           <span className="rounded bg-teal-100 px-2 py-0.5 text-teal-800">
             {selectedCanvasNodeIds.length} Karten ausgewählt
@@ -478,11 +567,13 @@ export function TaskCanvas() {
         ref={shellRef}
         className={[
           "relative min-h-0 flex-1 overflow-hidden bg-[var(--canvas)] bg-[radial-gradient(circle_at_1px_1px,var(--border)_1px,transparent_0)] bg-[length:24px_24px]",
-          spaceHeld || panning
-            ? panning
-              ? "cursor-grabbing"
-              : "cursor-grab"
-            : "cursor-grab",
+          placingSymbolType
+            ? "cursor-crosshair"
+            : spaceHeld || panning
+              ? panning
+                ? "cursor-grabbing"
+                : "cursor-grab"
+              : "cursor-grab",
         ].join(" ")}
         onPointerDown={(e) => {
           const onBackground = isCanvasBackgroundTarget(e.target, e.currentTarget);
@@ -494,6 +585,8 @@ export function TaskCanvas() {
             return;
           }
           if (e.button !== 0 || !onBackground) return;
+          // Symbol placement: wait for click, don't pan
+          if (placingSymbolType) return;
           // Shift+drag on empty area = lasso
           if (e.shiftKey) {
             const startX = e.clientX;
@@ -564,6 +657,7 @@ export function TaskCanvas() {
           } catch { /* ignore */ }
         }}
         onDoubleClick={(e) => {
+          if (placingSymbolType) return;
           if (!isCanvasBackgroundTarget(e.target, e.currentTarget)) {
             return;
           }
@@ -579,6 +673,15 @@ export function TaskCanvas() {
         onClick={(e) => {
           // Only clear selection if directly clicking background (not from lasso / pan-drag)
           if (!isCanvasBackgroundTarget(e.target, e.currentTarget)) return;
+          if (placingSymbolType) {
+            const el = shellRef.current;
+            if (!el) return;
+            const rect = el.getBoundingClientRect();
+            const world = screenToWorld(canvasViewport, e.clientX, e.clientY, rect);
+            placeSymbolAtWorld(placingSymbolType, world.x, world.y);
+            setPlacingSymbolType(null);
+            return;
+          }
           if (lasso || lassoJustFinished.current || panMoved.current) {
             panMoved.current = false;
             return;
@@ -588,12 +691,14 @@ export function TaskCanvas() {
           clearCanvasMultiSelect();
           setSelectedGroupId(null);
           setContextMenu(null);
+          setSymbolPaletteOpen(false);
         }}
         onContextMenu={(e) => {
           e.preventDefault();
           const el = shellRef.current;
           if (!el) return;
           const rect = el.getBoundingClientRect();
+          setContextSymbolGroup(null);
           setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top });
         }}
       >
@@ -666,35 +771,60 @@ export function TaskCanvas() {
               reconnectRelation(relationId, end, newNodeId)
             }
           />
-          {nodes.map((node) => (
-            <TaskCanvasCard
-              key={node.id}
-              node={node}
-              completedTag={completedTag}
-              selected={selectedCanvasNodeId === node.id || selectedCanvasNodeIds.includes(node.id)}
-              connectSource={relationDraftSourceId === node.id}
-              nestTarget={nestHoverId === node.id}
-              zoom={canvasViewport.zoom}
-              requestTitleEdit={pendingTitleEditId === node.id}
-              onTitleEditConsumed={() => setPendingTitleEditId(null)}
-              onSelect={(shiftKey) => handleCardSelect(node.id, shiftKey ?? false)}
-              onDrill={() => drillIntoNode(node.id)}
-              onMove={(x, y, delta) => handleCardMove(node.id, x, y, delta)}
-              onResize={(patch) => resizeCanvasNode(node.id, patch)}
-              onRotate={(r) => rotateCanvasNode(node.id, r)}
-              onConnectHandle={() => handleCardConnect(node.id)}
-              onNestHoverChange={setNestHoverId}
-              onNestOnto={(targetId) => handleNestOnto(node.id, targetId)}
-              onContextMenu={(e) => {
-                const el = shellRef.current;
-                if (!el) return;
-                const rect = el.getBoundingClientRect();
-                setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, nodeId: node.id });
-                setSelectedCanvasNodeId(node.id);
-              }}
-              multiSelected={selectedCanvasNodeIds.includes(node.id) && selectedCanvasNodeIds.length > 1}
-            />
-          ))}
+          {nodes.map((node) =>
+            isSymbolNode(node) ? (
+              <TaskCanvasSymbol
+                key={node.id}
+                node={node}
+                selected={selectedCanvasNodeId === node.id || selectedCanvasNodeIds.includes(node.id)}
+                connectSource={relationDraftSourceId === node.id}
+                zoom={canvasViewport.zoom}
+                requestTitleEdit={pendingTitleEditId === node.id}
+                onTitleEditConsumed={() => setPendingTitleEditId(null)}
+                onSelect={(shiftKey) => handleCardSelect(node.id, shiftKey ?? false)}
+                onMove={(x, y, delta) => handleCardMove(node.id, x, y, delta)}
+                onResize={(patch) => resizeCanvasNode(node.id, patch)}
+                onRotate={(r) => rotateCanvasNode(node.id, r)}
+                onConnectHandle={() => handleCardConnect(node.id)}
+                onContextMenu={(e) => {
+                  const el = shellRef.current;
+                  if (!el) return;
+                  const rect = el.getBoundingClientRect();
+                  setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, nodeId: node.id });
+                  setSelectedCanvasNodeId(node.id);
+                }}
+                multiSelected={selectedCanvasNodeIds.includes(node.id) && selectedCanvasNodeIds.length > 1}
+              />
+            ) : (
+              <TaskCanvasCard
+                key={node.id}
+                node={node}
+                completedTag={completedTag}
+                selected={selectedCanvasNodeId === node.id || selectedCanvasNodeIds.includes(node.id)}
+                connectSource={relationDraftSourceId === node.id}
+                nestTarget={nestHoverId === node.id}
+                zoom={canvasViewport.zoom}
+                requestTitleEdit={pendingTitleEditId === node.id}
+                onTitleEditConsumed={() => setPendingTitleEditId(null)}
+                onSelect={(shiftKey) => handleCardSelect(node.id, shiftKey ?? false)}
+                onDrill={() => drillIntoNode(node.id)}
+                onMove={(x, y, delta) => handleCardMove(node.id, x, y, delta)}
+                onResize={(patch) => resizeCanvasNode(node.id, patch)}
+                onRotate={(r) => rotateCanvasNode(node.id, r)}
+                onConnectHandle={() => handleCardConnect(node.id)}
+                onNestHoverChange={setNestHoverId}
+                onNestOnto={(targetId) => handleNestOnto(node.id, targetId)}
+                onContextMenu={(e) => {
+                  const el = shellRef.current;
+                  if (!el) return;
+                  const rect = el.getBoundingClientRect();
+                  setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, nodeId: node.id });
+                  setSelectedCanvasNodeId(node.id);
+                }}
+                multiSelected={selectedCanvasNodeIds.includes(node.id) && selectedCanvasNodeIds.length > 1}
+              />
+            ),
+          )}
           {nodes.length === 0 ? (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border border-dashed border-slate-300 bg-white/80 px-4 py-3 text-sm text-slate-500">
               Keine Karten auf dieser Ebene — Doppelklick zum Anlegen
@@ -766,7 +896,10 @@ export function TaskCanvas() {
                     setContextMenu(null);
                   }}
                 >
-                  🗑 Karte löschen
+                  🗑 {(() => {
+                    const n = nodes.find((x) => x.id === contextMenu.nodeId);
+                    return isSymbolNode(n ?? {}) ? "Symbol löschen" : "Karte löschen";
+                  })()}
                 </button>
               </>
             ) : (
@@ -805,6 +938,70 @@ export function TaskCanvas() {
                 >
                   + Neue Notiz
                 </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                    onClick={() =>
+                      setContextSymbolGroup((g) => (g === "useCase" ? null : "useCase"))
+                    }
+                  >
+                    <span>+ Use Case</span>
+                    <span className="text-slate-400">{contextSymbolGroup === "useCase" ? "▾" : "▸"}</span>
+                  </button>
+                  {contextSymbolGroup === "useCase"
+                    ? listSymbolTypesByGroup("useCase").map((def) => (
+                        <button
+                          key={def.id}
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 pl-6 text-left text-sm text-slate-700 hover:bg-slate-100"
+                          onClick={() => {
+                            const el = shellRef.current;
+                            if (!el) { setContextMenu(null); return; }
+                            const rect = el.getBoundingClientRect();
+                            const world = screenToWorld(canvasViewport, contextMenu.x + rect.left, contextMenu.y + rect.top, rect);
+                            placeSymbolAtWorld(def.id, world.x, world.y);
+                            setContextMenu(null);
+                            setContextSymbolGroup(null);
+                          }}
+                        >
+                          {def.label}
+                        </button>
+                      ))
+                    : null}
+                </div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                    onClick={() =>
+                      setContextSymbolGroup((g) => (g === "flowchart" ? null : "flowchart"))
+                    }
+                  >
+                    <span>+ Flowchart</span>
+                    <span className="text-slate-400">{contextSymbolGroup === "flowchart" ? "▾" : "▸"}</span>
+                  </button>
+                  {contextSymbolGroup === "flowchart"
+                    ? listSymbolTypesByGroup("flowchart").map((def) => (
+                        <button
+                          key={def.id}
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 pl-6 text-left text-sm text-slate-700 hover:bg-slate-100"
+                          onClick={() => {
+                            const el = shellRef.current;
+                            if (!el) { setContextMenu(null); return; }
+                            const rect = el.getBoundingClientRect();
+                            const world = screenToWorld(canvasViewport, contextMenu.x + rect.left, contextMenu.y + rect.top, rect);
+                            placeSymbolAtWorld(def.id, world.x, world.y);
+                            setContextMenu(null);
+                            setContextSymbolGroup(null);
+                          }}
+                        >
+                          {def.label}
+                        </button>
+                      ))
+                    : null}
+                </div>
                 <button
                   type="button"
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"

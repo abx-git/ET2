@@ -1,5 +1,5 @@
 import type { TaskNode } from "@/types/task-node";
-import { isNoteNode, nodeDisplayTitle, normalizeNoteMarkdown } from "@/lib/tree-node-kind";
+import { isNoteNode, isSymbolNode, nodeDisplayTitle, normalizeNoteMarkdown } from "@/lib/tree-node-kind";
 
 export type TaskSearchHit = {
   nodeId: string;
@@ -49,6 +49,7 @@ function nodeMatchesAllTerms(node: TaskNode, terms: string[]): boolean {
 
 /**
  * Freitextsuche über Titel, Beschreibung und Tags (alle Suchwörter müssen vorkommen).
+ * Canvas-Symbole werden übersprungen.
  */
 export function searchTaskNodes(
   roots: TaskNode[],
@@ -62,6 +63,10 @@ export function searchTaskNodes(
 
   function walk(nodes: TaskNode[], ancestorTitles: string[]) {
     for (const node of nodes) {
+      if (isSymbolNode(node)) {
+        walk(node.children, ancestorTitles);
+        continue;
+      }
       if (nodeMatchesAllTerms(node, terms)) {
         const title = nodeDisplayTitle(node);
         hits.push({
@@ -78,6 +83,5 @@ export function searchTaskNodes(
 
   walk(roots, []);
 
-  hits.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, "de"));
-  return hits.slice(0, limit);
+  return hits.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title)).slice(0, limit);
 }

@@ -24,7 +24,8 @@ import {
   tagsAvailableForFilter,
   uniqNonEmptyTags,
 } from "@/lib/task-tags";
-import { isNoteNode, normalizeNoteMarkdown } from "@/lib/tree-node-kind";
+import { isCardNode, isNoteNode, isSymbolNode, normalizeNoteMarkdown } from "@/lib/tree-node-kind";
+import { getSymbolTypeDefinition } from "@/lib/diagram-symbol";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import {
   TASK_RELATION_TYPE_LABELS,
@@ -76,7 +77,7 @@ export function TaskDetailSidebar() {
 
   const allTags = useMemo(() => collectAllTagsFromForest(roots), [roots]);
   const pickableTags = useMemo(
-    () => (node && !isNoteNode(node) ? tagsAvailableForFilter(allTags, node.tags) : []),
+    () => (node && isCardNode(node) ? tagsAvailableForFilter(allTags, node.tags) : []),
     [allTags, node],
   );
 
@@ -226,7 +227,53 @@ export function TaskDetailSidebar() {
           </div>
         ) : null}
 
-        {node && !isNoteNode(node) ? (
+        {node && isSymbolNode(node) ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                Symbol
+                {node.symbolType ? ` · ${getSymbolTypeDefinition(node.symbolType).label}` : ""}
+              </p>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 hover:bg-slate-200"
+                title="ID kopieren"
+                onClick={() => {
+                  void navigator.clipboard.writeText(node.id);
+                  setIdCopied(true);
+                  window.setTimeout(() => setIdCopied(false), 1200);
+                }}
+              >
+                {formatTaskIdForDisplay(node.id)}
+                {idCopied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3 opacity-60" />}
+              </button>
+            </div>
+            <div>
+              <label className={labelClass} htmlFor="et2-symbol-title">
+                Beschriftung
+              </label>
+              <input
+                id="et2-symbol-title"
+                className={fieldClass}
+                value={node.title}
+                onChange={(e) => updateCard(node.id, { title: e.target.value })}
+              />
+            </div>
+            <p className="text-[11px] text-slate-400">Nur auf dem Canvas sichtbar — nicht in der Liste.</p>
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs font-medium text-rose-800 hover:bg-rose-100"
+              onClick={() => {
+                if (window.confirm("Symbol löschen?")) removeCard(node.id);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              Löschen
+            </button>
+          </div>
+        ) : null}
+
+        {node && isCardNode(node) ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Karte</p>

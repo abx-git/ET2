@@ -1,8 +1,9 @@
 import type { TaskNode } from "@/types/task-node";
 import type { TaskRelation } from "@/types/task-relation";
 import { relationArrowLabel, TASK_RELATION_TYPE_LABELS } from "@/types/task-relation";
-import { isNoteNode } from "@/lib/tree-node-kind";
+import { isNoteNode, isSymbolNode } from "@/lib/tree-node-kind";
 import { taskLinkHref } from "@/lib/task-link";
+import { getSymbolTypeDefinition } from "@/lib/diagram-symbol";
 
 function formatRelationLine(srcTitle: string, tgtTitle: string, rel: TaskRelation): string {
   const arrow = `${srcTitle} → ${tgtTitle}`;
@@ -35,7 +36,10 @@ export function exportCanvasAsPrompt(
   lines.push("");
 
   for (const node of nodes) {
-    if (isNoteNode(node)) {
+    if (isSymbolNode(node) && node.symbolType) {
+      const label = getSymbolTypeDefinition(node.symbolType).label;
+      lines.push(`### [${label}] ${node.title || "(Ohne Titel)"}`);
+    } else if (isNoteNode(node)) {
       lines.push(`### [Notiz] ${node.title || "(Ohne Titel)"}`);
       if (node.markdown?.trim()) {
         lines.push("");
@@ -66,6 +70,8 @@ export function exportCanvasAsPrompt(
           if (isNoteNode(child)) {
             const title = child.title || child.markdown?.split("\n")[0]?.replace(/^#+\s*/, "") || "Notiz";
             lines.push(`  - [Notiz] ${title}`);
+          } else if (isSymbolNode(child) && child.symbolType) {
+            lines.push(`  - [${getSymbolTypeDefinition(child.symbolType).label}] ${child.title || "(Ohne Titel)"}`);
           } else {
             lines.push(`  - ${child.title || "(Ohne Titel)"}`);
           }

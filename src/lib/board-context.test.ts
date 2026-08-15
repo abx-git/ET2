@@ -37,6 +37,22 @@ describe("board-context", () => {
     expect(contextChildren(roots, "a").map((n) => n.id)).toEqual(["a1", "a2"]);
   });
 
+  it("excludes symbols by default and includes them when asked", () => {
+    const withSymbol: TaskNode[] = [
+      node("a", "A"),
+      {
+        ...node("s", "Actor"),
+        kind: "symbol",
+        symbolType: "actor",
+      },
+    ];
+    expect(contextChildren(withSymbol, null).map((n) => n.id)).toEqual(["a"]);
+    expect(contextChildren(withSymbol, null, { includeSymbols: true }).map((n) => n.id)).toEqual([
+      "a",
+      "s",
+    ]);
+  });
+
   it("builds path ids", () => {
     expect(contextPathIds(roots, "a11")).toEqual(["a", "a1", "a11"]);
     expect(contextPathIds(roots, null)).toEqual([]);

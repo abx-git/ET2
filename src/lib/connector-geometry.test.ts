@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { findCardAtWorldPoint, relationAnchors } from "@/lib/connector-geometry";
+import {
+  diamondEdgePoint,
+  ellipseEdgePoint,
+  findCardAtWorldPoint,
+  relationAnchors,
+} from "@/lib/connector-geometry";
 import type { TaskNode } from "@/types/task-node";
 
 function card(
   id: string,
-  opts: Partial<Pick<TaskNode, "x" | "y" | "width" | "height">> = {},
+  opts: Partial<Pick<TaskNode, "x" | "y" | "width" | "height" | "kind" | "symbolType">> = {},
 ): TaskNode {
   return {
     id,
@@ -21,6 +26,8 @@ function card(
     y: opts.y ?? 0,
     width: opts.width ?? 200,
     height: opts.height ?? 100,
+    ...(opts.kind ? { kind: opts.kind } : {}),
+    ...(opts.symbolType ? { symbolType: opts.symbolType } : {}),
   };
 }
 
@@ -47,5 +54,44 @@ describe("relationAnchors", () => {
     expect(start.y).toBeCloseTo(50);
     expect(end.x).toBeCloseTo(200);
     expect(end.y).toBeCloseTo(50);
+  });
+
+  it("anchors to ellipse and diamond edges for symbols", () => {
+    const ellipse = card("uc", {
+      kind: "symbol",
+      symbolType: "useCase",
+      x: 0,
+      y: 0,
+      width: 160,
+      height: 80,
+    });
+    const diamond = card("dec", {
+      kind: "symbol",
+      symbolType: "decision",
+      x: 300,
+      y: -20,
+      width: 120,
+      height: 120,
+    });
+    const { start, end } = relationAnchors(ellipse, diamond);
+    // Centers aligned on y=40 → right tip of ellipse / left tip of diamond
+    expect(start.x).toBeCloseTo(160, 0);
+    expect(start.y).toBeCloseTo(40, 0);
+    expect(end.x).toBeCloseTo(300, 0);
+    expect(end.y).toBeCloseTo(40, 0);
+  });
+});
+
+describe("ellipseEdgePoint / diamondEdgePoint", () => {
+  it("hits the right tip of a diamond", () => {
+    const p = diamondEdgePoint({ x: 0, y: 0, w: 100, h: 100 }, { x: 200, y: 50 });
+    expect(p.x).toBeCloseTo(100);
+    expect(p.y).toBeCloseTo(50);
+  });
+
+  it("hits the right tip of an ellipse", () => {
+    const p = ellipseEdgePoint({ x: 0, y: 0, w: 100, h: 50 }, { x: 200, y: 25 });
+    expect(p.x).toBeCloseTo(100);
+    expect(p.y).toBeCloseTo(25);
   });
 });

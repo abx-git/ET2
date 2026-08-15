@@ -28,7 +28,8 @@ import {
 import { generateUniqueTaskIdFromTaken } from "@/lib/task-id";
 import { normalizeTaskCommand } from "@/lib/task-command";
 import { normalizeTaskLink } from "@/lib/task-link";
-import { isNoteNode, normalizeNoteMarkdown } from "@/lib/tree-node-kind";
+import { isSymbolType, type SymbolType } from "@/lib/diagram-symbol";
+import { isNoteNode, isSymbolNode, normalizeNoteMarkdown } from "@/lib/tree-node-kind";
 import type { TaskNode } from "@/types/task-node";
 import type { TaskRelation } from "@/types/task-relation";
 import { parseTaskRelations, sanitizeRelations } from "@/lib/task-relations";
@@ -90,7 +91,9 @@ function isLegacyTaskStatus(s: unknown): s is LegacyTaskStatus {
 /** JSON-Darstellung eines Knotens (ISO-Datumstrings). */
 export interface TaskNodeJson {
   id: string;
-  kind?: "card" | "note";
+  kind?: "card" | "note" | "symbol";
+  /** Form bei `kind: "symbol"`. */
+  symbolType?: SymbolType;
   title: string;
   markdown?: string;
   link?: string;
@@ -194,6 +197,16 @@ export function taskNodeToJson(node: TaskNode): TaskNodeJson {
       children: node.children.map(taskNodeToJson),
     };
   }
+  if (isSymbolNode(node) && node.symbolType) {
+    return {
+      id: node.id,
+      kind: "symbol",
+      symbolType: node.symbolType,
+      title: node.title,
+      ...canvasLayoutToJson(node),
+      children: node.children.map(taskNodeToJson),
+    };
+  }
   return {
     id: node.id,
     title: node.title,
@@ -219,6 +232,26 @@ export function taskNodeFromJson(j: TaskNodeJson): TaskNode {
       kind: "note",
       title: j.title,
       markdown: typeof j.markdown === "string" ? normalizeNoteMarkdown(j.markdown) : "",
+      link: "",
+      description: "",
+      tags: [],
+      dueDate: null,
+      reminderDate: null,
+      effort: 0,
+      ...canvasLayoutFromJson(j),
+      children: j.children.map(taskNodeFromJson),
+    };
+  }
+  if (j.kind === "symbol") {
+    const symbolType = j.symbolType;
+    if (!isSymbolType(symbolType)) {
+      throw new Error("symbolType: gültiger Symboltyp erwartet");
+    }
+    return {
+      id: j.id,
+      kind: "symbol",
+      symbolType,
+      title: j.title,
       link: "",
       description: "",
       tags: [],
@@ -359,8 +392,8 @@ function expectTaskNodeJson(raw: unknown, path: string): TaskNodeJson {
 
   if (typeof id !== "string" || !id.trim()) throw new Error(`${path}.id: nicht-leere Zeichenkette erwartet`);
   if (typeof title !== "string") throw new Error(`${path}.title: Zeichenkette erwartet`);
-  if (kindRaw !== undefined && kindRaw !== "card" && kindRaw !== "note") {
-    throw new Error(`${path}.kind: card oder note erwartet`);
+  if (kindRaw !== undefined && kindRaw !== "card" && kindRaw !== "note" && kindRaw !== "symbol") {
+    throw new Error(`${path}.kind: card, note oder symbol erwartet`);
   }
   if (markdownRaw !== undefined && typeof markdownRaw !== "string") {
     throw new Error(`${path}.markdown: Zeichenkette erwartet`);
@@ -390,6 +423,21 @@ function expectTaskNodeJson(raw: unknown, path: string): TaskNodeJson {
       dueDate: null,
       reminderDate: null,
       effort: 0,
+      ...layoutJson,
+      children: children.map((ch, i) => expectTaskNodeJson(ch, `${path}.children[${i}]`)),
+    };
+  }
+
+  if (kindRaw === "symbol") {
+    const symbolTypeRaw = o.symbolType;
+    if (!isSymbolType(symbolTypeRaw)) {
+      throw new Error(`${path}.symbolType: gültiger Symboltyp erwartet`);
+    }
+    return {
+      id,
+      kind: "symbol",
+      symbolType: symbolTypeRaw,
+      title,
       ...layoutJson,
       children: children.map((ch, i) => expectTaskNodeJson(ch, `${path}.children[${i}]`)),
     };

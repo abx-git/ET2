@@ -32,7 +32,7 @@ Weiterhin `hierarchical-task-manager`. ET2 speichert zusätzlich Canvas-Felder (
 
 ## Kartentypen
 
-Phase 1: `card` und `note`. Weitere Typen (analog E2-Modi) über die Card-Type-Registry (`src/lib/card-type-registry.ts`).
+`card` und `note` in Liste und Canvas; `symbol` (Use Case / Flowchart) nur im Canvas — nicht in Liste, Outline oder Suche. Registry: `src/lib/card-type-registry.ts`, Formen: `src/lib/diagram-symbol.ts`.
 
 ## Repository
 

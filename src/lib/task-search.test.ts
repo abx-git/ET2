@@ -48,4 +48,13 @@ describe("searchTaskNodes", () => {
     expect(hits.length).toBeGreaterThanOrEqual(2);
     expect(hits[0]?.nodeId).toBe("a");
   });
+
+  it("überspringt Canvas-Symbole", () => {
+    const withSymbol: TaskNode[] = [
+      ...roots,
+      node({ id: "sym", title: "Entscheidung Gateway", kind: "symbol", symbolType: "decision" }),
+    ];
+    expect(searchTaskNodes(withSymbol, "Entscheidung")).toEqual([]);
+    expect(searchTaskNodes(withSymbol, "Gateway")).toEqual([]);
+  });
 });

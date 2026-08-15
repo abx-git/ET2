@@ -9,20 +9,32 @@ import {
   pathFromRootToNode,
 } from "@/lib/tree-utils";
 import { isTaskMarkedDone } from "@/lib/task-tags";
+import { isSymbolNode } from "@/lib/tree-node-kind";
 import type { TaskNode } from "@/types/task-node";
+
+export interface ContextChildrenOptions {
+  hideCompleted?: boolean;
+  completedTag?: string;
+  /** Canvas-only Symbole; Standard false (Liste/Outline). */
+  includeSymbols?: boolean;
+}
 
 /** Children visible in the context list (`null` context = board roots). */
 export function contextChildren(
   roots: TaskNode[],
   contextNodeId: string | null,
-  options?: { hideCompleted?: boolean; completedTag?: string },
+  options?: ContextChildrenOptions,
 ): TaskNode[] {
   const raw =
     contextNodeId === null
       ? roots
       : (findNodeById(roots, contextNodeId)?.children ?? []);
-  if (!options?.hideCompleted || !options.completedTag) return raw;
-  return raw.filter((n) => !isTaskMarkedDone(n, options.completedTag!));
+  let out = raw;
+  if (!options?.includeSymbols) {
+    out = out.filter((n) => !isSymbolNode(n));
+  }
+  if (!options?.hideCompleted || !options.completedTag) return out;
+  return out.filter((n) => !isTaskMarkedDone(n, options.completedTag!));
 }
 
 /** Breadcrumb path ids from root to context (empty when at roots). */

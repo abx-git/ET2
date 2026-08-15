@@ -1,17 +1,27 @@
+import {
+  getSymbolTypeDefinition,
+  type SymbolType,
+} from "@/lib/diagram-symbol";
 import type { TaskNode } from "@/types/task-node";
 
-export type TreeNodeKind = "card" | "note";
+export type TreeNodeKind = "card" | "note" | "symbol";
 
 export function getNodeKind(node: Pick<TaskNode, "kind">): TreeNodeKind {
-  return node.kind === "note" ? "note" : "card";
+  if (node.kind === "note") return "note";
+  if (node.kind === "symbol") return "symbol";
+  return "card";
 }
 
 export function isNoteNode(node: Pick<TaskNode, "kind">): boolean {
   return getNodeKind(node) === "note";
 }
 
+export function isSymbolNode(node: Pick<TaskNode, "kind">): boolean {
+  return getNodeKind(node) === "symbol";
+}
+
 export function isCardNode(node: Pick<TaskNode, "kind">): boolean {
-  return !isNoteNode(node);
+  return getNodeKind(node) === "card";
 }
 
 export function normalizeNoteMarkdown(raw: string): string {
@@ -37,6 +47,9 @@ export function nodeDisplayTitle(node: TaskNode): string {
       .map((line) => line.trim())
       .find(Boolean);
     return first || "Notiz";
+  }
+  if (isSymbolNode(node) && node.symbolType) {
+    return getSymbolTypeDefinition(node.symbolType).label;
   }
   return "(Ohne Titel)";
 }
@@ -76,6 +89,26 @@ export function createBlankNoteNode(id: string): TaskNode {
     dueDate: null,
     reminderDate: null,
     effort: 0,
+    children: [],
+  };
+}
+
+export function createBlankSymbolNode(id: string, symbolType: SymbolType): TaskNode {
+  const def = getSymbolTypeDefinition(symbolType);
+  return {
+    id,
+    kind: "symbol",
+    symbolType,
+    title: def.defaultTitle,
+    link: "",
+    command: "",
+    description: "",
+    tags: [],
+    dueDate: null,
+    reminderDate: null,
+    effort: 0,
+    width: def.defaultWidth,
+    height: def.defaultHeight,
     children: [],
   };
 }

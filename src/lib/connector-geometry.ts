@@ -1,4 +1,5 @@
 import { defaultCardSize } from "@/lib/card-type-registry";
+import { isSymbolNode } from "@/lib/tree-node-kind";
 import type { TaskNode } from "@/types/task-node";
 
 export interface Point {
@@ -14,7 +15,7 @@ export interface ElementRect {
 }
 
 export function taskCardRect(node: TaskNode): ElementRect {
-  const defaults = defaultCardSize(node.kind);
+  const defaults = defaultCardSize(node.kind, node.symbolType);
   return {
     x: node.x ?? 0,
     y: node.y ?? 0,
@@ -48,17 +49,55 @@ export function rectEdgePoint(rect: ElementRect, from: Point, toward: Point): Po
   return { x: cx + dx * t, y: cy + dy * t };
 }
 
+/** Ray from center toward `toward` ∩ ellipse inscribed in rect. */
+export function ellipseEdgePoint(rect: ElementRect, toward: Point): Point {
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  const rx = rect.w / 2;
+  const ry = rect.h / 2;
+  const dx = toward.x - cx;
+  const dy = toward.y - cy;
+  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) {
+    return { x: cx + rx, y: cy };
+  }
+  const scale = 1 / Math.sqrt((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry));
+  return { x: cx + dx * scale, y: cy + dy * scale };
+}
+
+/** Ray from center toward `toward` ∩ diamond (rhombus) inscribed in rect. */
+export function diamondEdgePoint(rect: ElementRect, toward: Point): Point {
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  const hw = rect.w / 2;
+  const hh = rect.h / 2;
+  const dx = toward.x - cx;
+  const dy = toward.y - cy;
+  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) {
+    return { x: cx + hw, y: cy };
+  }
+  const t = 1 / (Math.abs(dx) / hw + Math.abs(dy) / hh);
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+
+function nodeEdgePoint(node: TaskNode, toward: Point): Point {
+  const rect = taskCardRect(node);
+  const center = taskCardCenter(node);
+  if (isSymbolNode(node)) {
+    if (node.symbolType === "useCase") return ellipseEdgePoint(rect, toward);
+    if (node.symbolType === "decision") return diamondEdgePoint(rect, toward);
+  }
+  return rectEdgePoint(rect, center, toward);
+}
+
 export function relationAnchors(
   source: TaskNode,
   target: TaskNode,
 ): { start: Point; end: Point } {
   const sc = taskCardCenter(source);
   const tc = taskCardCenter(target);
-  const sRect = taskCardRect(source);
-  const tRect = taskCardRect(target);
   return {
-    start: rectEdgePoint(sRect, sc, tc),
-    end: rectEdgePoint(tRect, tc, sc),
+    start: nodeEdgePoint(source, tc),
+    end: nodeEdgePoint(target, sc),
   };
 }
 

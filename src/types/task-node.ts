@@ -1,4 +1,5 @@
 import type { CardColorId } from "@/lib/card-color";
+import type { SymbolType } from "@/lib/diagram-symbol";
 import type { EffortSource, EffortUnit } from "@/lib/task-effort";
 import type { TreeNodeKind } from "@/lib/tree-node-kind";
 
@@ -10,11 +11,14 @@ import type { TreeNodeKind } from "@/lib/tree-node-kind";
  * `effortSource`: `manual` (eingetragen) oder `calculated` (Summe offener Kinder, per Knopf).
  * `tags` sind freie Schlagworte; das Tag „Erledigt“ (Groß-/Kleinschreibung egal) steuert Filter und Darstellung.
  * `kind: "note"` = Markdown-Notiz ohne Karten-Attribute (nur Titel + Markdown-Inhalt).
+ * `kind: "symbol"` = Canvas-only Ablaufplan-/Use-Case-Symbol (`symbolType`); nicht in Liste/Outline.
  */
 export interface TaskNode {
   id: string;
-  /** `card` (Standard) oder `note` für Markdown-Notizen. */
+  /** `card` (Standard), `note` für Markdown-Notizen, `symbol` für Canvas-Diagrammformen. */
   kind?: TreeNodeKind;
+  /** Form bei `kind: "symbol"`. */
+  symbolType?: SymbolType;
   title: string;
   /** Markdown-Inhalt (nur bei `kind: "note"`). */
   markdown?: string;

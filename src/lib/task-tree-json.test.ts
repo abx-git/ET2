@@ -80,6 +80,58 @@ describe("task-tree-json", () => {
     expect(back.title).toBe("Memo");
   });
 
+  it("roundtrips canvas symbol nodes", () => {
+    const symbol: TaskNode = {
+      id: "sym-1",
+      kind: "symbol",
+      symbolType: "decision",
+      title: "Genehmigt?",
+      link: "",
+      description: "",
+      tags: [],
+      dueDate: null,
+      reminderDate: null,
+      effort: 0,
+      x: 40,
+      y: 80,
+      width: 120,
+      height: 120,
+      children: [],
+    };
+    const json = taskNodeToJson(symbol);
+    expect(json.kind).toBe("symbol");
+    expect(json.symbolType).toBe("decision");
+    const back = taskNodeFromJson(json);
+    expect(back.kind).toBe("symbol");
+    expect(back.symbolType).toBe("decision");
+    expect(back.title).toBe("Genehmigt?");
+    expect(back.x).toBe(40);
+  });
+
+  it("rejects invalid symbolType", () => {
+    expect(() =>
+      parseExportedDocument(
+        JSON.stringify({
+          format: EXPORT_FORMAT,
+          version: EXPORT_VERSION,
+          exportedAt: new Date().toISOString(),
+          scope: "board",
+          roots: [
+            {
+              id: "bad",
+              kind: "symbol",
+              symbolType: "not-a-shape",
+              title: "x",
+              children: [],
+            },
+          ],
+          pathIds: [],
+          columnTitleOverrides: {},
+        }),
+      ),
+    ).toThrow(/symbolType/);
+  });
+
   it("parses board export containing note nodes", () => {
     const note: TaskNode = {
       id: "note-1",

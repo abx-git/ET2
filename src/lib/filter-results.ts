@@ -13,7 +13,7 @@ import {
 import type { CardColorId } from "@/lib/card-color";
 import { appendMarkdownDescriptionLines } from "@/lib/obsidian-tasks-export";
 import { isTaskMarkedDone } from "@/lib/task-tags";
-import { isNoteNode } from "@/lib/tree-node-kind";
+import { isNoteNode, isSymbolNode } from "@/lib/tree-node-kind";
 import type { TaskNode } from "@/types/task-node";
 
 export type FilterResultsMarkdownStyle = "plain" | "checklist";
@@ -103,9 +103,10 @@ export function collectFilterMatchingCards(
       const pathTitles = [...ancestors, title];
       const done = isTaskMarkedDone(node, options.completedTag);
 
-      // Notizen sind keine Filter-Treffer (nur Karten mit Facetten).
+      // Notizen und Canvas-Symbole sind keine Filter-Treffer.
       if (
         !isNoteNode(node) &&
+        !isSymbolNode(node) &&
         nodeMatchesBoardFilters(node, filterOpts) &&
         (includeDone || !done)
       ) {

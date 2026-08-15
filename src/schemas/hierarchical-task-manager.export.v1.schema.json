@@ -32,9 +32,78 @@
         },
         {
           "$ref": "#/definitions/NoteTaskNodeJson"
+        },
+        {
+          "$ref": "#/definitions/SymbolTaskNodeJson"
         }
       ],
-      "description": "Aufgabenknoten: Karte (Standard) oder Markdown-Notiz (`kind: \"note\"`)."
+      "description": "Aufgabenknoten: Karte (Standard), Markdown-Notiz (`kind: \"note\"`) oder Canvas-Symbol (`kind: \"symbol\"`)."
+    },
+    "SymbolType": {
+      "type": "string",
+      "enum": [
+        "actor",
+        "useCase",
+        "systemBoundary",
+        "process",
+        "decision",
+        "terminator",
+        "document"
+      ],
+      "description": "Canvas-only Ablaufplan-/Use-Case-Form."
+    },
+    "SymbolTaskNodeJson": {
+      "type": "object",
+      "description": "Canvas-only Diagrammsymbol (nicht in Listenansicht).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Eindeutige Knoten-ID (z. B. UUID)."
+        },
+        "kind": {
+          "type": "string",
+          "const": "symbol"
+        },
+        "symbolType": {
+          "$ref": "#/definitions/SymbolType"
+        },
+        "title": {
+          "type": "string"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TaskNodeJson"
+          }
+        },
+        "x": {
+          "type": "number",
+          "description": "Canvas X (ET2)."
+        },
+        "y": {
+          "type": "number",
+          "description": "Canvas Y (ET2)."
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Canvas width (ET2)."
+        },
+        "height": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Canvas height (ET2)."
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "symbolType",
+        "title",
+        "children"
+      ],
+      "additionalProperties": false
     },
     "NoteTaskNodeJson": {
       "type": "object",

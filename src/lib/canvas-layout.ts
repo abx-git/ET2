@@ -17,7 +17,7 @@ export function ensureCanvasLayout(nodes: TaskNode[]): TaskNode[] {
   let changed = false;
   const out = nodes.map((node) => {
     if (nodeHasCanvasPosition(node)) return node;
-    const size = defaultCardSize(node.kind);
+    const size = defaultCardSize(node.kind, node.symbolType);
     const col = nextIndex % COLS;
     const row = Math.floor(nextIndex / COLS);
     nextIndex += 1;
