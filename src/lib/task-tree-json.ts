@@ -53,29 +53,37 @@ function finiteNumber(v: unknown): number | undefined {
   return typeof v === "number" && Number.isFinite(v) ? v : undefined;
 }
 
-function canvasLayoutToJson(node: TaskNode): Pick<TaskNodeJson, "x" | "y" | "width" | "height"> {
-  const out: Pick<TaskNodeJson, "x" | "y" | "width" | "height"> = {};
+function canvasLayoutToJson(
+  node: TaskNode,
+): Pick<TaskNodeJson, "x" | "y" | "width" | "height" | "zIndex"> {
+  const out: Pick<TaskNodeJson, "x" | "y" | "width" | "height" | "zIndex"> = {};
   const x = finiteNumber(node.x);
   const y = finiteNumber(node.y);
   const width = finiteNumber(node.width);
   const height = finiteNumber(node.height);
+  const zIndex = finiteNumber(node.zIndex);
   if (x !== undefined) out.x = x;
   if (y !== undefined) out.y = y;
   if (width !== undefined) out.width = width;
   if (height !== undefined) out.height = height;
+  if (zIndex !== undefined) out.zIndex = zIndex;
   return out;
 }
 
-function canvasLayoutFromJson(j: TaskNodeJson): Pick<TaskNode, "x" | "y" | "width" | "height"> {
-  const out: Pick<TaskNode, "x" | "y" | "width" | "height"> = {};
+function canvasLayoutFromJson(
+  j: TaskNodeJson,
+): Pick<TaskNode, "x" | "y" | "width" | "height" | "zIndex"> {
+  const out: Pick<TaskNode, "x" | "y" | "width" | "height" | "zIndex"> = {};
   const x = finiteNumber(j.x);
   const y = finiteNumber(j.y);
   const width = finiteNumber(j.width);
   const height = finiteNumber(j.height);
+  const zIndex = finiteNumber(j.zIndex);
   if (x !== undefined) out.x = x;
   if (y !== undefined) out.y = y;
   if (width !== undefined) out.width = width;
   if (height !== undefined) out.height = height;
+  if (zIndex !== undefined) out.zIndex = zIndex;
   return out;
 }
 
@@ -114,6 +122,8 @@ export interface TaskNodeJson {
   y?: number;
   width?: number;
   height?: number;
+  /** Canvas-Stapelreihenfolge (ET2). */
+  zIndex?: number;
   children: TaskNodeJson[];
 }
 
@@ -399,16 +409,17 @@ function expectTaskNodeJson(raw: unknown, path: string): TaskNodeJson {
     throw new Error(`${path}.markdown: Zeichenkette erwartet`);
   }
   if (!Array.isArray(children)) throw new Error(`${path}.children: Array erwartet`);
-  for (const key of ["x", "y", "width", "height"] as const) {
+  for (const key of ["x", "y", "width", "height", "zIndex"] as const) {
     if (o[key] !== undefined && (typeof o[key] !== "number" || !Number.isFinite(o[key] as number))) {
       throw new Error(`${path}.${key}: Zahl erwartet`);
     }
   }
-  const layoutJson: Pick<TaskNodeJson, "x" | "y" | "width" | "height"> = {};
+  const layoutJson: Pick<TaskNodeJson, "x" | "y" | "width" | "height" | "zIndex"> = {};
   if (typeof o.x === "number") layoutJson.x = o.x;
   if (typeof o.y === "number") layoutJson.y = o.y;
   if (typeof o.width === "number") layoutJson.width = o.width;
   if (typeof o.height === "number") layoutJson.height = o.height;
+  if (typeof o.zIndex === "number") layoutJson.zIndex = o.zIndex;
 
   if (kindRaw === "note") {
     return {

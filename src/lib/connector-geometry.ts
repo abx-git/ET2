@@ -1,4 +1,5 @@
 import { defaultCardSize } from "@/lib/card-type-registry";
+import { resolveCanvasZIndex } from "@/lib/canvas-stack";
 import { isSymbolNode } from "@/lib/tree-node-kind";
 import type { TaskNode } from "@/types/task-node";
 
@@ -101,7 +102,8 @@ export function relationAnchors(
   };
 }
 
-/** Top-most card whose axis-aligned rect contains the world point (last in `nodes` wins). */
+/** Top-most card whose axis-aligned rect contains the world point.
+ * Bei Überlappung gewinnt die höhere Canvas-Stapelebene (`zIndex`). */
 export function findCardAtWorldPoint(
   nodes: readonly TaskNode[],
   worldX: number,
@@ -114,7 +116,10 @@ export function findCardAtWorldPoint(
       : excludeIds instanceof Set
         ? excludeIds
         : new Set(excludeIds);
-  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+  let best: TaskNode | null = null;
+  let bestZ = -Infinity;
+  let bestIndex = -1;
+  for (let i = 0; i < nodes.length; i += 1) {
     const node = nodes[i];
     if (!node) continue;
     if (excluded?.has(node.id)) continue;
@@ -125,8 +130,13 @@ export function findCardAtWorldPoint(
       worldY >= r.y &&
       worldY <= r.y + r.h
     ) {
-      return node;
+      const z = resolveCanvasZIndex(node);
+      if (z > bestZ || (z === bestZ && i > bestIndex)) {
+        best = node;
+        bestZ = z;
+        bestIndex = i;
+      }
     }
   }
-  return null;
+  return best;
 }

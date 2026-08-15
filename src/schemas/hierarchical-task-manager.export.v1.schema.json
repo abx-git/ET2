@@ -94,6 +94,10 @@
           "type": "number",
           "minimum": 0,
           "description": "Canvas height (ET2)."
+        },
+        "zIndex": {
+          "type": "number",
+          "description": "Canvas stack order (ET2); higher draws in front."
         }
       },
       "required": [

@@ -11,6 +11,7 @@ import { KeyboardShortcutsHelpDialog } from "@/components/keyboard-shortcuts-hel
 import { contextChildren } from "@/lib/board-context";
 import { nodeMatchesBoardFilters } from "@/lib/board-filters";
 import { nodeHasCanvasPosition } from "@/lib/canvas-layout";
+import { compareCanvasStackOrder } from "@/lib/canvas-stack";
 import { isNodeInsideGroup } from "@/lib/canvas-group";
 import {
   DEFAULT_CANVAS_VIEWPORT,
@@ -63,6 +64,7 @@ export function TaskCanvas() {
   const moveCanvasNodesBy = useTaskTreeStore((s) => s.moveCanvasNodesBy);
   const resizeCanvasNode = useTaskTreeStore((s) => s.resizeCanvasNode);
   const rotateCanvasNode = useTaskTreeStore((s) => s.rotateCanvasNode);
+  const reorderCanvasNodeZIndex = useTaskTreeStore((s) => s.reorderCanvasNodeZIndex);
   const drillIntoNode = useTaskTreeStore((s) => s.drillIntoNode);
   const addCardAfter = useTaskTreeStore((s) => s.addCardAfter);
   const addNoteAfter = useTaskTreeStore((s) => s.addNoteAfter);
@@ -771,7 +773,7 @@ export function TaskCanvas() {
               reconnectRelation(relationId, end, newNodeId)
             }
           />
-          {nodes.map((node) =>
+          {[...nodes].sort(compareCanvasStackOrder).map((node) =>
             isSymbolNode(node) ? (
               <TaskCanvasSymbol
                 key={node.id}
@@ -842,65 +844,121 @@ export function TaskCanvas() {
           >
             {contextMenu.nodeId ? (
               <>
-                {/* Card-specific context menu */}
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
-                  onClick={() => {
-                    drillIntoNode(contextMenu.nodeId!);
-                    setContextMenu(null);
-                  }}
-                >
-                  → Hinein
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
-                  onClick={() => {
-                    setRelationConnectMode(true);
-                    setRelationDraftSourceId(contextMenu.nodeId!);
-                    setContextMenu(null);
-                  }}
-                >
-                  ↗ Verbindung ab hier
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
-                  onClick={() => {
-                    setPendingTitleEditId(contextMenu.nodeId!);
-                    setContextMenu(null);
-                  }}
-                >
-                  ✎ Titel bearbeiten
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
-                  onClick={() => {
-                    const ids = selectedCanvasNodeIds.length > 1 && selectedCanvasNodeIds.includes(contextMenu.nodeId!)
-                      ? selectedCanvasNodeIds
-                      : [contextMenu.nodeId!];
-                    moveNodesToClipboard(ids);
-                    setContextMenu(null);
-                  }}
-                >
-                  📋 In Zwischenablage
-                </button>
-                <hr className="my-1 border-slate-100" />
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-700 hover:bg-red-50"
-                  onClick={() => {
-                    removeCard(contextMenu.nodeId!);
-                    setContextMenu(null);
-                  }}
-                >
-                  🗑 {(() => {
-                    const n = nodes.find((x) => x.id === contextMenu.nodeId);
-                    return isSymbolNode(n ?? {}) ? "Symbol löschen" : "Karte löschen";
-                  })()}
-                </button>
+                {(() => {
+                  const menuNode = nodes.find((x) => x.id === contextMenu.nodeId);
+                  const symbol = menuNode ? isSymbolNode(menuNode) : false;
+                  return (
+                    <>
+                      {!symbol ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                          onClick={() => {
+                            drillIntoNode(contextMenu.nodeId!);
+                            setContextMenu(null);
+                          }}
+                        >
+                          → Hinein
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                        onClick={() => {
+                          setRelationConnectMode(true);
+                          setRelationDraftSourceId(contextMenu.nodeId!);
+                          setContextMenu(null);
+                        }}
+                      >
+                        ↗ Verbindung ab hier
+                      </button>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                        onClick={() => {
+                          setPendingTitleEditId(contextMenu.nodeId!);
+                          setContextMenu(null);
+                        }}
+                      >
+                        ✎ Titel bearbeiten
+                      </button>
+                      {symbol ? (
+                        <>
+                          <hr className="my-1 border-slate-100" />
+                          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                            Ebene
+                          </p>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                            onClick={() => {
+                              reorderCanvasNodeZIndex(contextMenu.nodeId!, "forward");
+                              setContextMenu(null);
+                            }}
+                          >
+                            Nach vorne
+                          </button>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                            onClick={() => {
+                              reorderCanvasNodeZIndex(contextMenu.nodeId!, "backward");
+                              setContextMenu(null);
+                            }}
+                          >
+                            Nach hinten
+                          </button>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                            onClick={() => {
+                              reorderCanvasNodeZIndex(contextMenu.nodeId!, "front");
+                              setContextMenu(null);
+                            }}
+                          >
+                            Ganz nach vorne
+                          </button>
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                            onClick={() => {
+                              reorderCanvasNodeZIndex(contextMenu.nodeId!, "back");
+                              setContextMenu(null);
+                            }}
+                          >
+                            Ganz nach hinten
+                          </button>
+                        </>
+                      ) : null}
+                      {!symbol ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                          onClick={() => {
+                            const ids = selectedCanvasNodeIds.length > 1 && selectedCanvasNodeIds.includes(contextMenu.nodeId!)
+                              ? selectedCanvasNodeIds
+                              : [contextMenu.nodeId!];
+                            moveNodesToClipboard(ids);
+                            setContextMenu(null);
+                          }}
+                        >
+                          📋 In Zwischenablage
+                        </button>
+                      ) : null}
+                      <hr className="my-1 border-slate-100" />
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-700 hover:bg-red-50"
+                        onClick={() => {
+                          removeCard(contextMenu.nodeId!);
+                          setContextMenu(null);
+                        }}
+                      >
+                        🗑 {symbol ? "Symbol löschen" : "Karte löschen"}
+                      </button>
+                    </>
+                  );
+                })()}
               </>
             ) : (
               <>

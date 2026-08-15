@@ -56,6 +56,7 @@ export function TaskDetailSidebar() {
   const updateRelation = useTaskTreeStore((s) => s.updateRelation);
   const disconnectRelation = useTaskTreeStore((s) => s.disconnectRelation);
   const removeCard = useTaskTreeStore((s) => s.removeCard);
+  const reorderCanvasNodeZIndex = useTaskTreeStore((s) => s.reorderCanvasNodeZIndex);
   const drillIntoNode = useTaskTreeStore((s) => s.drillIntoNode);
   const cardFieldVisibility = useTaskTreeStore((s) => s.cardFieldVisibility);
   const effortOnTasksEnabled = useTaskTreeStore((s) => s.effortOnTasksEnabled);
@@ -258,6 +259,39 @@ export function TaskDetailSidebar() {
                 value={node.title}
                 onChange={(e) => updateCard(node.id, { title: e.target.value })}
               />
+            </div>
+            <div>
+              <p className={labelClass}>Ebene</p>
+              <div className="mt-1 grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                  onClick={() => reorderCanvasNodeZIndex(node.id, "forward")}
+                >
+                  Nach vorne
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                  onClick={() => reorderCanvasNodeZIndex(node.id, "backward")}
+                >
+                  Nach hinten
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                  onClick={() => reorderCanvasNodeZIndex(node.id, "front")}
+                >
+                  Ganz nach vorne
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                  onClick={() => reorderCanvasNodeZIndex(node.id, "back")}
+                >
+                  Ganz nach hinten
+                </button>
+              </div>
             </div>
             <p className="text-[11px] text-slate-400">Nur auf dem Canvas sichtbar — nicht in der Liste.</p>
             <button

@@ -1,5 +1,6 @@
 import {
   getSymbolTypeDefinition,
+  defaultSymbolZIndex,
   type SymbolType,
 } from "@/lib/diagram-symbol";
 import type { TaskNode } from "@/types/task-node";
@@ -109,6 +110,7 @@ export function createBlankSymbolNode(id: string, symbolType: SymbolType): TaskN
     effort: 0,
     width: def.defaultWidth,
     height: def.defaultHeight,
+    zIndex: defaultSymbolZIndex(symbolType),
     children: [],
   };
 }

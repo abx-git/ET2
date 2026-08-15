@@ -110,3 +110,8 @@ export function defaultSymbolSize(type: SymbolType): { width: number; height: nu
   const d = SYMBOL_TYPE_DEFINITIONS[type];
   return { width: d.defaultWidth, height: d.defaultHeight };
 }
+
+/** Standard-Stapelebene: Systemgrenzen hinten, übrige Symbole darüber. */
+export function defaultSymbolZIndex(type: SymbolType): number {
+  return type === "systemBoundary" ? 0 : 10;
+}

@@ -89,6 +89,10 @@ import {
 } from "@/lib/canvas-viewport";
 import type { CanvasGroup } from "@/lib/canvas-group";
 import {
+  computeCanvasZIndexPatches,
+  type CanvasZAction,
+} from "@/lib/canvas-stack";
+import {
   DEFAULT_APPEARANCE,
   normalizeAppearance,
   type BoardAppearance,
@@ -347,6 +351,9 @@ export interface TaskTreeState {
   ) => void;
   /** Karte rotieren (Grad). */
   rotateCanvasNode: (nodeId: string, rotation: number) => void;
+  /** Canvas-Stapelebene setzen bzw. relativ verschieben (Symbole/Karten). */
+  setCanvasNodeZIndex: (nodeId: string, zIndex: number) => void;
+  reorderCanvasNodeZIndex: (nodeId: string, action: CanvasZAction) => void;
   connectTasks: (sourceId: string, targetId: string, type?: TaskRelationType) => string | null;
   /** Pfeil-Ende umhängen: `end` ist welcher Anker (Quelle oder Ziel) neu gesetzt wird. */
   reconnectRelation: (
@@ -1159,6 +1166,30 @@ export const useTaskTreeStore = create<TaskTreeState>()(
       const nextRoots = updateNodeFields(s.roots, nodeId, {
         rotation: Math.round(rotation * 10) / 10,
       });
+      return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
+    });
+  },
+
+  setCanvasNodeZIndex: (nodeId, zIndex) => {
+    set((s) => {
+      const nextRoots = updateNodeFields(s.roots, nodeId, {
+        zIndex: Math.round(zIndex),
+      });
+      return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
+    });
+  },
+
+  reorderCanvasNodeZIndex: (nodeId, action) => {
+    set((s) => {
+      const parentId = findDirectParentId(s.roots, nodeId);
+      if (parentId === undefined) return {};
+      const siblings = getSiblingsList(s.roots, parentId);
+      const patches = computeCanvasZIndexPatches(siblings, nodeId, action);
+      if (patches.length === 0) return {};
+      let nextRoots = s.roots;
+      for (const patch of patches) {
+        nextRoots = updateNodeFields(nextRoots, patch.id, { zIndex: patch.zIndex });
+      }
       return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
     });
   },

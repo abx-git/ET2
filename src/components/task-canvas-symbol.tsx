@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
+import { canvasStackCssZIndex } from "@/lib/canvas-stack";
 import { taskCardRect } from "@/lib/connector-geometry";
 import { getSymbolTypeDefinition, type SymbolType } from "@/lib/diagram-symbol";
 import { useTaskTreeStore } from "@/store/task-tree-store";
@@ -201,6 +202,12 @@ export function TaskCanvasSymbol({
 
   const showHandles = selected || hovered || connectSource;
   const titleOnShape = symbolType !== "actor";
+  const zIndex = canvasStackCssZIndex(node, {
+    selected,
+    hovered,
+    connectSource,
+    editing,
+  });
 
   const startResize = (handle: ResizeHandle, e: React.PointerEvent) => {
     e.stopPropagation();
@@ -289,7 +296,7 @@ export function TaskCanvasSymbol({
         height: rect.h,
         transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
         transformOrigin: "center center",
-        zIndex: selected || connectSource || editing ? 20 : hovered ? 18 : 14,
+        zIndex,
       }}
       title={def.label}
       onPointerEnter={() => setHovered(true)}
@@ -409,7 +416,7 @@ export function TaskCanvasSymbol({
         <button
           type="button"
           data-card-title
-          className="absolute bottom-0 left-0 right-0 z-10 truncate px-1 text-center text-[11px] font-medium text-slate-800"
+          className="absolute bottom-0 left-1/2 z-10 max-w-[95%] -translate-x-1/2 truncate rounded-sm bg-white/95 px-1.5 py-0.5 text-center text-[11px] font-medium text-slate-800 ring-1 ring-slate-200/80"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();

@@ -10,6 +10,7 @@ import {
   isDueOverdue,
 } from "@/lib/aggregates";
 import { cardColorAccentClass, cardColorClass } from "@/lib/card-color";
+import { canvasStackCssZIndex } from "@/lib/canvas-stack";
 import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
 import { taskCardRect } from "@/lib/connector-geometry";
 import {
@@ -307,7 +308,12 @@ export function TaskCanvasCard({
         height: rect.h,
         transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
         transformOrigin: "center center",
-        zIndex: selected || connectSource || editing || nestTarget ? 20 : hovered ? 18 : 15,
+        zIndex: canvasStackCssZIndex(node, {
+          selected: selected || nestTarget,
+          hovered,
+          connectSource,
+          editing,
+        }),
       }}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => { if (!drag.current) setHovered(false); }}

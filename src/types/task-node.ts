@@ -43,6 +43,8 @@ export interface TaskNode {
   height?: number;
   /** Optionale Rotation in Grad (0 = normal). */
   rotation?: number;
+  /** Canvas-Stapelreihenfolge (höher = weiter vorne). Fehlt → Default je nach Typ. */
+  zIndex?: number;
   children: TaskNode[];
 }
 

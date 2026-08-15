@@ -10,7 +10,7 @@ import type { TaskNode } from "@/types/task-node";
 
 function card(
   id: string,
-  opts: Partial<Pick<TaskNode, "x" | "y" | "width" | "height" | "kind" | "symbolType">> = {},
+  opts: Partial<Pick<TaskNode, "x" | "y" | "width" | "height" | "kind" | "symbolType" | "zIndex">> = {},
 ): TaskNode {
   return {
     id,
@@ -28,6 +28,7 @@ function card(
     height: opts.height ?? 100,
     ...(opts.kind ? { kind: opts.kind } : {}),
     ...(opts.symbolType ? { symbolType: opts.symbolType } : {}),
+    ...(opts.zIndex !== undefined ? { zIndex: opts.zIndex } : {}),
   };
 }
 
@@ -42,6 +43,30 @@ describe("findCardAtWorldPoint", () => {
   it("respects exclude ids", () => {
     const a = card("a", { x: 0, y: 0 });
     expect(findCardAtWorldPoint([a], 10, 10, ["a"])).toBeNull();
+  });
+
+  it("prefers symbols inside a system boundary over the boundary", () => {
+    const boundary = card("bound", {
+      kind: "symbol",
+      symbolType: "systemBoundary",
+      x: 0,
+      y: 0,
+      width: 400,
+      height: 300,
+      zIndex: 0,
+    });
+    const inner = card("uc", {
+      kind: "symbol",
+      symbolType: "useCase",
+      x: 100,
+      y: 100,
+      width: 160,
+      height: 80,
+      zIndex: 10,
+    });
+    expect(findCardAtWorldPoint([boundary, inner], 120, 120)?.id).toBe("uc");
+    expect(findCardAtWorldPoint([inner, boundary], 120, 120)?.id).toBe("uc");
+    expect(findCardAtWorldPoint([boundary, inner], 10, 10)?.id).toBe("bound");
   });
 });
 

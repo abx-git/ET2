@@ -43,6 +43,7 @@ export function updateNodeFields(
       | "width"
       | "height"
       | "rotation"
+      | "zIndex"
     >
   >,
 ): TaskNode[] {
