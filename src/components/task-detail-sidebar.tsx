@@ -4,8 +4,10 @@ import { Check, Copy, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { NoteMarkdownContent } from "@/components/note-markdown-content";
+import { CardIconBadge } from "@/components/card-icon-badge";
 import { mergeCardFieldVisibility } from "@/lib/card-field-visibility";
 import { CARD_COLOR_OPTIONS, type CardColorId } from "@/lib/card-color";
+import { CARD_ICON_OPTIONS, type CardIconId } from "@/lib/card-icon";
 import { fromInputDateTimeLocal, toInputDateTimeLocal } from "@/lib/task-datetime";
 import {
   EFFORT_UNIT_LABELS,
@@ -397,6 +399,37 @@ export function TaskDetailSidebar({
                     ].join(" ")}
                     onClick={() => updateCard(node.id, { cardColor: opt.id as CardColorId })}
                   />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className={labelClass}>Icon</span>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  title="Kein Icon"
+                  className={[
+                    "flex h-7 w-7 items-center justify-center rounded-full border bg-white text-[10px] text-slate-400",
+                    !node.cardIcon ? "border-sky-500 ring-2 ring-sky-200" : "border-slate-200",
+                  ].join(" ")}
+                  onClick={() => updateCard(node.id, { cardIcon: undefined })}
+                >
+                  —
+                </button>
+                {CARD_ICON_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    title={opt.label}
+                    className={[
+                      "flex h-7 w-7 items-center justify-center rounded-full",
+                      node.cardIcon === opt.id ? "ring-2 ring-sky-400 ring-offset-1" : "",
+                    ].join(" ")}
+                    onClick={() => updateCard(node.id, { cardIcon: opt.id as CardIconId })}
+                  >
+                    <CardIconBadge icon={opt.id} size="md" />
+                  </button>
                 ))}
               </div>
             </div>

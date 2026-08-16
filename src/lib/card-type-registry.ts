@@ -32,6 +32,7 @@ const REGISTRY: Record<string, CardTypeDefinition> = {
       "link",
       "command",
       "cardColor",
+      "cardIcon",
     ],
     listVisibleIn: "all",
   },

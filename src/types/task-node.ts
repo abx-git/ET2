@@ -1,4 +1,5 @@
 import type { CardColorId } from "@/lib/card-color";
+import type { CardIconId } from "@/lib/card-icon";
 import type { SymbolType } from "@/lib/diagram-symbol";
 import type { EffortSource, EffortUnit } from "@/lib/task-effort";
 import type { TreeNodeKind } from "@/lib/tree-node-kind";
@@ -35,6 +36,8 @@ export interface TaskNode {
   effortSource?: EffortSource;
   /** Optionale Kartenfarbe (Palette); Akzentleiste bleibt auch bei Statusfarben. */
   cardColor?: CardColorId;
+  /** Optionales Statusicon (Info, Frage, …). */
+  cardIcon?: CardIconId;
   /** Canvas-Position (Weltkoordinaten); fehlt → Auto-Layout in der Canvas-Ansicht. */
   x?: number;
   y?: number;
@@ -62,6 +65,7 @@ export type TaskCardEditableFields = Pick<
   | "effortUnit"
   | "effortSource"
   | "cardColor"
+  | "cardIcon"
 >;
 
 /** Felder, die im Notiz-Dialog geändert werden können. */

@@ -6,6 +6,8 @@ import { createPortal } from "react-dom";
 
 import { mergeCardFieldVisibility } from "@/lib/card-field-visibility";
 import { CARD_COLOR_OPTIONS, type CardColorId } from "@/lib/card-color";
+import { CARD_ICON_OPTIONS, type CardIconId } from "@/lib/card-icon";
+import { CardIconBadge } from "@/components/card-icon-badge";
 import { fromInputDateTimeLocal, toInputDateTimeLocal } from "@/lib/task-datetime";
 import {
   calculateEffortFieldsFromChildren,
@@ -77,6 +79,7 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
   const [dueDate, setDueDate] = useState("");
   const [reminderDate, setReminderDate] = useState("");
   const [cardColor, setCardColor] = useState<CardColorId | undefined>(undefined);
+  const [cardIcon, setCardIcon] = useState<CardIconId | undefined>(undefined);
   const [idCopied, setIdCopied] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -94,6 +97,7 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
     setDueDate(toInputDateTimeLocal(node.dueDate));
     setReminderDate(toInputDateTimeLocal(node.reminderDate));
     setCardColor(node.cardColor);
+    setCardIcon(node.cardIcon);
     setIdCopied(false);
   }, [open, node]);
 
@@ -203,6 +207,7 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
         dueDate: fromInputDateTimeLocal(dueDate),
         reminderDate: fromInputDateTimeLocal(reminderDate),
         cardColor,
+        cardIcon,
       },
       meta,
     );
@@ -357,6 +362,43 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
                     aria-label={opt.label}
                     aria-pressed={cardColor === opt.id}
                   />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className={labelClass}>Icon</span>
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCardIcon(undefined)}
+                  className={[
+                    "flex h-7 w-7 items-center justify-center rounded-full border bg-white text-[10px] text-slate-400 transition",
+                    !cardIcon ? "border-sky-500 ring-2 ring-sky-200" : "border-slate-200 hover:border-slate-300",
+                  ].join(" ")}
+                  title="Kein Icon"
+                  aria-label="Kein Icon"
+                  aria-pressed={!cardIcon}
+                >
+                  —
+                </button>
+                {CARD_ICON_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setCardIcon(opt.id)}
+                    className={[
+                      "flex h-7 w-7 items-center justify-center rounded-full transition",
+                      cardIcon === opt.id
+                        ? "ring-2 ring-sky-400 ring-offset-1"
+                        : "hover:ring-1 hover:ring-slate-300",
+                    ].join(" ")}
+                    title={opt.label}
+                    aria-label={opt.label}
+                    aria-pressed={cardIcon === opt.id}
+                  >
+                    <CardIconBadge icon={opt.id} size="md" />
+                  </button>
                 ))}
               </div>
             </div>

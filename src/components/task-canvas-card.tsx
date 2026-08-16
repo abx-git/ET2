@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { NoteMarkdownContent } from "@/components/note-markdown-content";
+import { CardIconBadge } from "@/components/card-icon-badge";
 import {
   aggregateNextDueOpen,
   aggregateOverdueDue,
@@ -420,7 +421,7 @@ export function TaskCanvasCard({
           ) : (
             <span
               data-card-title
-              className="max-w-full w-fit cursor-text line-clamp-3 text-[13px] font-semibold leading-snug text-slate-900"
+              className="flex max-w-full w-fit cursor-text items-start gap-1.5 text-[13px] font-semibold leading-snug text-slate-900"
               onPointerDown={(e) => {
                 if (connecting) return;
                 e.stopPropagation();
@@ -434,7 +435,10 @@ export function TaskCanvasCard({
                 beginEdit();
               }}
             >
-              {node.title.trim() || <span className="text-slate-400 font-normal italic">Ohne Titel</span>}
+              {!note ? <CardIconBadge icon={node.cardIcon} className="mt-0.5" /> : null}
+              <span className="line-clamp-3">
+                {node.title.trim() || <span className="text-slate-400 font-normal italic">Ohne Titel</span>}
+              </span>
             </span>
           )}
 

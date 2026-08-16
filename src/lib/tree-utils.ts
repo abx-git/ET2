@@ -38,6 +38,7 @@ export function updateNodeFields(
       | "effortUnit"
       | "effortSource"
       | "cardColor"
+      | "cardIcon"
       | "x"
       | "y"
       | "width"
@@ -52,7 +53,14 @@ export function updateNodeFields(
     return nodes.map((n) => {
       if (n.id === nodeId) {
         found = true;
-        return { ...n, ...fields };
+        const next = { ...n, ...fields };
+        if ("cardIcon" in fields && fields.cardIcon === undefined) {
+          delete next.cardIcon;
+        }
+        if ("cardColor" in fields && fields.cardColor === undefined) {
+          delete next.cardColor;
+        }
+        return next;
       }
       if (n.children.length === 0) return n;
       return { ...n, children: mapNodes(n.children) };

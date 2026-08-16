@@ -260,6 +260,20 @@
           ],
           "description": "Optional: Kartenfarbe aus der vordefinierten Palette."
         },
+        "cardIcon": {
+          "type": "string",
+          "enum": [
+            "info",
+            "question",
+            "warning",
+            "idea",
+            "decision",
+            "important",
+            "risk",
+            "bug"
+          ],
+          "description": "Optional: Statusicon (Info, Frage, Warnung, …)."
+        },
         "children": {
           "type": "array",
           "items": {

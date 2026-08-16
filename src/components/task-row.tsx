@@ -39,6 +39,7 @@ import {
   cardColorClass,
   type CardColorId,
 } from "@/lib/card-color";
+import { CardIconBadge } from "@/components/card-icon-badge";
 import type { BoardPaneId } from "@/lib/board-pane";
 import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
 import { writeClipboardText } from "@/lib/clipboard";
@@ -522,7 +523,8 @@ export function TaskRow({
             aria-label="Titel"
           />
         ) : (
-          <h3 id={headingId} className="min-w-0">
+          <h3 id={headingId} className="flex min-w-0 items-center gap-1.5">
+            <CardIconBadge icon={node.cardIcon} />
             <button
               type="button"
               className={[
