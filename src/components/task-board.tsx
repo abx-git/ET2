@@ -13,7 +13,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { FileStack, HardDrive, LayoutGrid, List, Redo2, Undo2 } from "lucide-react";
+import { FileStack, HardDrive, LayoutGrid, List, Presentation, Redo2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import { useStore } from "zustand";
 
@@ -22,6 +22,7 @@ import {
   runManualBoardBackup,
 } from "@/components/board-backup-sync";
 import { TaskCanvas } from "@/components/task-canvas";
+import { TaskPresentation } from "@/components/task-presentation";
 import { applyAppearanceToElement } from "@/lib/board-appearance";
 import {
   backupBeforeSuspiciousSwitch,
@@ -1198,6 +1199,7 @@ export function TaskBoard() {
   const boardMaxVisibleLevels = useMemo(() => getBoardMaxVisibleLevels(roots), [roots]);
 
   const cardKeyboardBlocked =
+    boardViewMode === "presentation" ||
     titleEditNodeId !== null ||
     editorOpen ||
     pendingDeleteId !== null ||
@@ -1704,6 +1706,21 @@ export function TaskBoard() {
               <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
               <span className="hidden sm:inline">Canvas</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setBoardViewMode("presentation")}
+              className={[
+                "flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition",
+                boardViewMode === "presentation"
+                  ? "dock-control-active"
+                  : "text-[var(--muted)] hover:bg-[var(--control-hover)]",
+              ].join(" ")}
+              title="Präsentationsansicht"
+              aria-pressed={boardViewMode === "presentation"}
+            >
+              <Presentation className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden sm:inline">Präsentation</span>
+            </button>
           </div>
 
           <ClipboardDropTarget
@@ -1848,6 +1865,8 @@ export function TaskBoard() {
                       <TaskCanvas onOpenNoteEditor={openEditor} />
                     </div>
                   </>
+                ) : boardViewMode === "presentation" ? (
+                  <TaskPresentation />
                 ) : showSplitView ? (
                   <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
                     {renderPane("left")}

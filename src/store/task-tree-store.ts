@@ -121,7 +121,7 @@ export type BoardHistorySlice = {
   appearance: BoardAppearance;
 };
 
-export type BoardViewMode = "list" | "canvas";
+export type BoardViewMode = "list" | "canvas" | "presentation";
 
 function partializeBoardHistory(state: TaskTreeState): BoardHistorySlice {
   return {

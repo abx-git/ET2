@@ -139,6 +139,16 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
       ],
     },
     {
+      title: "Präsentation",
+      hint: "Ansicht „Präsentation“ — alle Einträge der aktuellen Ebene auf einer Folie.",
+      items: [
+        { keys: "↑ ↓", description: "Fokus zwischen Karten und Notizen auf der Folie" },
+        { keys: "→", description: "In fokussierte Karte mit Unterebene hinein" },
+        { keys: "← / Esc", description: "Eine Ebene höher (Esc beendet zuerst Vollbild)" },
+        { keys: "F", description: "Vollbild ein-/ausschalten" },
+      ],
+    },
+    {
       title: "Titel bearbeiten",
       hint: "Beim Anlegen oder per Klick auf den Titel (Canvas).",
       items: [
@@ -196,7 +206,7 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
             Bedienung
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Maus- und Tastaturbedienung für Canvas und Listenansicht.
+            Maus- und Tastaturbedienung für Canvas, Liste und Präsentation.
           </p>
         </div>
 
