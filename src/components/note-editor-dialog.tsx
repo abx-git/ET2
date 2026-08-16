@@ -119,7 +119,7 @@ export function NoteEditorDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex max-h-[min(92dvh,44rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/15 sm:max-h-[min(88vh,44rem)] sm:rounded-2xl"
+        className="flex h-[min(92dvh,44rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/15 sm:h-[min(88vh,44rem)] sm:rounded-2xl"
         onMouseDown={(e) => e.stopPropagation()}
         onSubmit={onSubmit}
       >
@@ -169,7 +169,7 @@ export function NoteEditorDialog({
             <NoteMarkdownEditor
               key={editorKey}
               ref={editorRef}
-              className="mdxeditor-full-height h-full"
+              className="mdxeditor-full-height"
               markdown={markdownSeed}
               onChange={(value) => setMarkdown(value)}
               contentEditableClassName="note-mdx-content min-h-[10rem] px-3 py-2 text-sm leading-relaxed text-slate-900 outline-none"

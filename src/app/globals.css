@@ -82,9 +82,10 @@ body {
   border: none;
   border-radius: 0.5rem;
   font-family: inherit;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-  height: 100%;
 }
 
 .note-mdx-editor .mdxeditor-toolbar {
@@ -92,6 +93,42 @@ body {
   background: #f8fafc;
   border-radius: 0.5rem 0.5rem 0 0;
   flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+/* DiffSourceWrapper setzt inline display:block — für Scroll-Kette überschreiben */
+.note-mdx-editor .mdxeditor-diff-source-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.note-mdx-editor .mdxeditor-rich-text-editor {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.note-mdx-editor .mdxeditor-root-contenteditable {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto !important;
+}
+
+.note-mdx-editor .mdxeditor-contenteditable-wrapper {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.note-mdx-editor .mdxeditor-source-editor,
+.note-mdx-editor .mdxeditor-diff-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .note-mdx-editor .note-mdx-content {
