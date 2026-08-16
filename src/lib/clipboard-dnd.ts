@@ -15,6 +15,8 @@ import {
 export const CLIPBOARD_DROP_TARGET_ID = "clipboard-drop-target";
 /** Gesamte geöffnete Seitenleiste als Drop-Fläche (zusätzlich zum Header-Button). */
 export const CLIPBOARD_SIDEBAR_DROP_ID = "clipboard-sidebar-drop";
+/** Canvas-Fläche: Drop aus der Zwischenablage. */
+export const CANVAS_DROP_TARGET_ID = "canvas-drop-target";
 export const CLIPBOARD_GAP_PREFIX = "clipboard-gap:";
 
 const CLIPBOARD_GAP_ROOT = "__root__";
@@ -151,7 +153,8 @@ export type UnifiedDragDrop =
   | { type: "to-clipboard"; target: ForestDropTarget }
   | { type: "within-clipboard"; target: ForestDropTarget }
   | { type: "from-clipboard-to-context"; drop: ContextListDrop }
-  | { type: "from-clipboard-to-outline"; drop: OutlineDrop };
+  | { type: "from-clipboard-to-outline"; drop: OutlineDrop }
+  | { type: "from-clipboard-to-canvas"; x: number; y: number };
 
 export function resolveUnifiedDragDrop(
   activeId: string,

@@ -1020,6 +1020,34 @@ export const useTaskTreeStore = create<TaskTreeState>()(
         };
       }
 
+      if (drop.type === "from-clipboard-to-canvas") {
+        const { next: clipNext, detached } = detachNodeById(s.clipboardRoots, activeId);
+        if (!detached) return {};
+        const parentId = s.contextNodeId;
+        const insertIndex = getSiblingsList(s.roots, parentId).length;
+        let boardNext = insertNodeIntoContextList(s.roots, parentId, detached, {
+          kind: "gap",
+          listParentId: parentId,
+          insertIndex,
+        });
+        if (boardNext === s.roots) return {};
+        boardNext = updateNodeFields(boardNext, detached.id, {
+          x: snapToGrid(drop.x),
+          y: snapToGrid(drop.y),
+        });
+        boardNext = refreshCalculatedEffortsInTree(boardNext, s.completedTag);
+        const nextPath = pathIdsAfterNodeMove(boardNext, detached.id, s.pathIds);
+        const contextByPane = normalizePaneContexts(boardNext, s.contextByPane);
+        return {
+          roots: boardNext,
+          pathIds: nextPath,
+          clipboardRoots: refreshCalculatedEffortsInTree(clipNext, s.completedTag),
+          selectedCanvasNodeId: detached.id,
+          selectedCanvasNodeIds: [detached.id],
+          ...syncActiveContext(contextByPane, s.activePane),
+        };
+      }
+
       return {};
     });
   },

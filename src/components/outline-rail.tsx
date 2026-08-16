@@ -43,6 +43,7 @@ function OutlineGap({
   return (
     <div
       ref={setNodeRef}
+      data-outline-drop-id={outlineGapId(listParentId, beforeId)}
       className={[
         "mx-1 rounded transition-all",
         isOver ? "h-2.5 bg-sky-200/90 ring-1 ring-sky-400" : "h-1",
@@ -91,6 +92,7 @@ function OutlineRow({
         setDragRef(el);
         setDropRef(el);
       }}
+      data-outline-drop-id={outlineNestId(node.id)}
       className={[
         "group flex touch-none cursor-grab items-center gap-0.5 rounded-md px-0.5 py-0.5 text-left text-[13px] leading-snug text-[var(--text)] active:cursor-grabbing",
         selected

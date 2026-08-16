@@ -73,6 +73,8 @@ export interface TaskCanvasCardProps {
   onNestHoverChange?: (targetId: string | null) => void;
   /** On drag end over another card: nest this card under targetId. */
   onNestOnto?: (targetId: string) => void;
+  /** On drag end over outline: return true if drop was handled. */
+  onOutlineDrop?: (clientX: number, clientY: number) => boolean;
   zoom: number;
   requestTitleEdit?: boolean;
   onTitleEditConsumed?: () => void;
@@ -95,6 +97,7 @@ export function TaskCanvasCard({
   onContextMenu,
   onNestHoverChange,
   onNestOnto,
+  onOutlineDrop,
   zoom,
   requestTitleEdit,
   onTitleEditConsumed,
@@ -364,6 +367,7 @@ export function TaskCanvasCard({
         try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* */ }
         onNestHoverChange?.(null);
         if (!state?.moved || editing) return;
+        if (onOutlineDrop?.(e.clientX, e.clientY)) return;
         const targetId = canvasCardIdFromPoint(e.clientX, e.clientY, node.id);
         if (targetId) onNestOnto?.(targetId);
       }}

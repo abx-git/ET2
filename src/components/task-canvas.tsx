@@ -1,5 +1,6 @@
 "use client";
 
+import { useDroppable } from "@dnd-kit/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TaskCanvasCard } from "@/components/task-canvas-card";
@@ -22,6 +23,7 @@ import {
   ZOOM_STEP,
   type CanvasViewport,
 } from "@/lib/canvas-viewport";
+import { CANVAS_DROP_TARGET_ID } from "@/lib/clipboard-dnd";
 import { taskCardRect } from "@/lib/connector-geometry";
 import {
   defaultSymbolSize,
@@ -32,7 +34,8 @@ import {
 import { exportCanvasAsPrompt } from "@/lib/prompt-export";
 import { relationsForContext } from "@/lib/task-relations";
 import { isTaskMarkedDone } from "@/lib/task-tags";
-import { isNoteNode, isSymbolNode } from "@/lib/tree-node-kind";
+import { isCardNode, isNoteNode, isSymbolNode } from "@/lib/tree-node-kind";
+import { outlineDropFromClientPoint } from "@/lib/outline-dnd";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import {
   TASK_RELATION_TYPE_LABELS,
@@ -321,6 +324,33 @@ export function TaskCanvas() {
     [applyOutlineDrag, nodes],
   );
 
+  /** Canvas-Karte/Notiz in die Struktur links legen (Pointer-Bridge). */
+  const handleDropOnOutline = useCallback(
+    (nodeId: string, clientX: number, clientY: number): boolean => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (!node || isSymbolNode(node)) return false;
+      if (!isCardNode(node) && !isNoteNode(node)) return false;
+      const drop = outlineDropFromClientPoint(clientX, clientY);
+      if (!drop) return false;
+      applyOutlineDrag(nodeId, drop);
+      return true;
+    },
+    [applyOutlineDrag, nodes],
+  );
+
+  const { setNodeRef: setCanvasDropRef, isOver: canvasDropOver } = useDroppable({
+    id: CANVAS_DROP_TARGET_ID,
+    data: { kind: "canvasDrop" as const },
+  });
+
+  const setShellRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      shellRef.current = el;
+      setCanvasDropRef(el);
+    },
+    [setCanvasDropRef],
+  );
+
   const fitAllCardsInView = useCallback(() => {
     const el = shellRef.current;
     if (!el) return;
@@ -566,9 +596,11 @@ export function TaskCanvas() {
       </div>
 
       <div
-        ref={shellRef}
+        ref={setShellRef}
+        data-et2-canvas-shell
         className={[
           "relative min-h-0 flex-1 overflow-hidden bg-[var(--canvas)] bg-[radial-gradient(circle_at_1px_1px,var(--border)_1px,transparent_0)] bg-[length:24px_24px]",
+          canvasDropOver ? "ring-2 ring-inset ring-sky-400/70" : "",
           placingSymbolType
             ? "cursor-crosshair"
             : spaceHeld || panning
@@ -816,6 +848,7 @@ export function TaskCanvas() {
                 onConnectHandle={() => handleCardConnect(node.id)}
                 onNestHoverChange={setNestHoverId}
                 onNestOnto={(targetId) => handleNestOnto(node.id, targetId)}
+                onOutlineDrop={(clientX, clientY) => handleDropOnOutline(node.id, clientX, clientY)}
                 onContextMenu={(e) => {
                   const el = shellRef.current;
                   if (!el) return;

@@ -15,6 +15,7 @@ import {
 import {
   CLIPBOARD_DROP_TARGET_ID,
   CLIPBOARD_SIDEBAR_DROP_ID,
+  CANVAS_DROP_TARGET_ID,
 } from "@/lib/clipboard-dnd";
 
 export type ClientPoint = { x: number; y: number };
@@ -71,6 +72,10 @@ export function isContextDroppable(container: DroppableContainer): boolean {
   return id.includes("context-gap:") || id.includes("context-nest:");
 }
 
+export function isCanvasDroppable(container: DroppableContainer): boolean {
+  return droppableKind(container) === "canvasDrop" || String(container.id) === CANVAS_DROP_TARGET_ID;
+}
+
 /** True, wenn der Zeiger im Bounding-Box-Bereich der Outline-Droppables liegt. */
 export function pointerOverOutlineZone(
   pointer: ClientPoint,
@@ -117,6 +122,13 @@ export const boardCollisionDetection: CollisionDetection = (args) => {
     );
     if (clip && activeSource !== "clipboard") return [clip];
 
+    const canvasHit = hits.find(
+      (c) =>
+        String(c.id) === CANVAS_DROP_TARGET_ID ||
+        c.data?.droppableContainer?.data?.current?.kind === "canvasDrop",
+    );
+    if (canvasHit && activeSource === "clipboard") return [canvasHit];
+
     const outlineRects = droppableContainers
       .filter(isOutlineDroppable)
       .map((c) => droppableRects.get(c.id));
@@ -143,6 +155,7 @@ export const boardCollisionDetection: CollisionDetection = (args) => {
   if (pointerCoordinates) {
     const outlineContainers = droppableContainers.filter(isOutlineDroppable);
     const contextContainers = droppableContainers.filter(isContextDroppable);
+    const canvasContainers = droppableContainers.filter(isCanvasDroppable);
     const outlineRects = outlineContainers.map((c) => droppableRects.get(c.id));
 
     if (
@@ -150,6 +163,15 @@ export const boardCollisionDetection: CollisionDetection = (args) => {
       pointerOverOutlineZone(pointerCoordinates, outlineRects)
     ) {
       return closestCenter({ ...args, droppableContainers: outlineContainers });
+    }
+
+    if (activeSource === "clipboard" && canvasContainers.length > 0) {
+      for (const container of canvasContainers) {
+        const rect = droppableRects.get(container.id);
+        if (rect && pointInClientRect(pointerCoordinates, rect)) {
+          return collisionFor(container);
+        }
+      }
     }
 
     if (contextContainers.length > 0) {

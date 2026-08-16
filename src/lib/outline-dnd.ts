@@ -110,6 +110,24 @@ export function outlineDropFromOverId(overId: string | number): OutlineDrop | nu
   return null;
 }
 
+/** Outline-Drop aus DOM unter dem Zeiger (Canvas-Pointer-Bridge). */
+export function outlineDropFromClientPoint(
+  clientX: number,
+  clientY: number,
+): OutlineDrop | null {
+  if (typeof document === "undefined") return null;
+  for (const el of document.elementsFromPoint(clientX, clientY)) {
+    if (!(el instanceof Element)) continue;
+    const host = el.closest("[data-outline-drop-id]");
+    if (!host) continue;
+    const id = host.getAttribute("data-outline-drop-id");
+    if (!id) continue;
+    const drop = outlineDropFromOverId(id);
+    if (drop) return drop;
+  }
+  return null;
+}
+
 function insertIndexForBeforeId(
   siblings: TaskNode[],
   beforeId: string | null,

@@ -132,12 +132,15 @@ import {
   parseOutlineNestId,
 } from "@/lib/outline-dnd";
 import {
+  CANVAS_DROP_TARGET_ID,
   CLIPBOARD_DROP_TARGET_ID,
   CLIPBOARD_SIDEBAR_DROP_ID,
   findNodeForestLocation,
   forestDropTargetFromOverId,
   parseClipboardGapId,
 } from "@/lib/clipboard-dnd";
+import { defaultCardSize } from "@/lib/card-type-registry";
+import { screenToWorld } from "@/lib/canvas-viewport";
 import { saveClipboardLinkToCard } from "@/lib/paste-card-link-from-clipboard";
 import { isNoteNode, nodeDisplayTitle } from "@/lib/tree-node-kind";
 import {
@@ -283,6 +286,7 @@ export function TaskBoard() {
 
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [nestDropTargetId, setNestDropTargetId] = useState<string | null>(null);
+  const lastDragPointerRef = useRef<{ x: number; y: number } | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorNodeId, setEditorNodeId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -952,7 +956,17 @@ export function TaskBoard() {
   const onDragStart = (e: DragStartEvent) => {
     setActiveDragId(String(e.active.id));
     setNestDropTargetId(null);
+    lastDragPointerRef.current = null;
   };
+
+  useEffect(() => {
+    if (!activeDragId) return;
+    const onMove = (ev: PointerEvent) => {
+      lastDragPointerRef.current = { x: ev.clientX, y: ev.clientY };
+    };
+    window.addEventListener("pointermove", onMove);
+    return () => window.removeEventListener("pointermove", onMove);
+  }, [activeDragId]);
 
   const onDragOver = (event: DragOverEvent) => {
     const over = event.over;
@@ -1053,6 +1067,26 @@ export function TaskBoard() {
             drop: { kind: "nest", targetId: nestTarget },
           });
         }
+        return;
+      }
+
+      if (overId === CANVAS_DROP_TARGET_ID || nestFromClip === "canvasDrop") {
+        const state = useTaskTreeStore.getState();
+        if (state.boardViewMode !== "canvas") return;
+        const shell = document.querySelector<HTMLElement>("[data-et2-canvas-shell]");
+        if (!shell) return;
+        const rect = shell.getBoundingClientRect();
+        const ptr = lastDragPointerRef.current;
+        const clientX = ptr?.x ?? rect.left + rect.width / 2;
+        const clientY = ptr?.y ?? rect.top + rect.height / 2;
+        const world = screenToWorld(state.canvasViewport, clientX, clientY, rect);
+        const clipNode = findNodeById(state.clipboardRoots, activeNodeId);
+        const size = defaultCardSize(clipNode?.kind);
+        applyUnifiedDrag(activeNodeId, {
+          type: "from-clipboard-to-canvas",
+          x: world.x - size.width / 2,
+          y: world.y - size.height / 2,
+        });
       }
       return;
     }
