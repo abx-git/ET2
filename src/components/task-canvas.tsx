@@ -34,6 +34,7 @@ import {
 import { exportCanvasAsPrompt } from "@/lib/prompt-export";
 import { relationsForContext } from "@/lib/task-relations";
 import { isTaskMarkedDone } from "@/lib/task-tags";
+import { shouldIgnoreCardKeyboard } from "@/lib/card-keyboard-nav";
 import { isCardNode, isNoteNode, isSymbolNode } from "@/lib/tree-node-kind";
 import { outlineDropFromClientPoint } from "@/lib/outline-dnd";
 import { useTaskTreeStore } from "@/store/task-tree-store";
@@ -195,7 +196,8 @@ export function TaskCanvas({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) {
+      // Space = Canvas-Pan; nicht abfangen in Inputs / contentEditable (MDX-Notiz-Editor).
+      if (e.code === "Space" && !shouldIgnoreCardKeyboard(e)) {
         spaceDown.current = true;
         setSpaceHeld(true);
         e.preventDefault();
