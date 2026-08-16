@@ -125,6 +125,10 @@ export function TaskCanvasCard({
   const effortOnTasksEnabled = useTaskTreeStore((s) => s.effortOnTasksEnabled);
   const fieldVisibility = useTaskTreeStore((s) => s.cardFieldVisibility);
   const note = isNoteNode(node);
+  const relationConnectMode = useTaskTreeStore((s) => s.relationConnectMode);
+  const relationDraftSourceId = useTaskTreeStore((s) => s.relationDraftSourceId);
+  /** Im Verbindungsmodus Klicks durchlassen / Verbindung abschließen statt Editor. */
+  const connecting = relationConnectMode || Boolean(relationDraftSourceId);
   const done = !note && isTaskMarkedDone(node, completedTag);
 
   useEffect(() => {
@@ -397,7 +401,7 @@ export function TaskCanvasCard({
       <div className={`h-2 w-full shrink-0 rounded-t-xl ${accent}`} />
 
       {/* Card body */}
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 py-2">
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden px-3 py-2">
         {/* Title row */}
         <div className="flex items-start justify-between gap-1.5">
           {editing ? (
@@ -417,8 +421,18 @@ export function TaskCanvasCard({
             <span
               data-card-title
               className="max-w-full w-fit cursor-text line-clamp-3 text-[13px] font-semibold leading-snug text-slate-900"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); beginEdit(); }}
+              onPointerDown={(e) => {
+                if (connecting) return;
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (connecting) {
+                  onSelect(false);
+                  return;
+                }
+                beginEdit();
+              }}
             >
               {node.title.trim() || <span className="text-slate-400 font-normal italic">Ohne Titel</span>}
             </span>
@@ -475,10 +489,17 @@ export function TaskCanvasCard({
           <button
             type="button"
             className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md text-left hover:bg-yellow-100/60"
-            title="Notiz bearbeiten"
-            onPointerDown={(e) => e.stopPropagation()}
+            title={connecting ? "Als Verbindungsziel wählen" : "Notiz bearbeiten"}
+            onPointerDown={(e) => {
+              if (connecting) return;
+              e.stopPropagation();
+            }}
             onClick={(e) => {
               e.stopPropagation();
+              if (connecting) {
+                onSelect(false);
+                return;
+              }
               onOpenNote?.();
             }}
           >

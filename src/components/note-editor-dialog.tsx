@@ -162,13 +162,14 @@ export function NoteEditorDialog({
           <div
             id={markdownId}
             className={[
-              "note-mdx-editor min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-200 focus-within:ring-2",
+              "note-mdx-editor flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 focus-within:ring-2",
               accent.editorRing,
             ].join(" ")}
           >
             <NoteMarkdownEditor
               key={editorKey}
               ref={editorRef}
+              className="mdxeditor-full-height h-full"
               markdown={markdownSeed}
               onChange={(value) => setMarkdown(value)}
               contentEditableClassName="note-mdx-content min-h-[10rem] px-3 py-2 text-sm leading-relaxed text-slate-900 outline-none"

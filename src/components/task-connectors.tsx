@@ -143,8 +143,14 @@ export function TaskConnectors({
   const handleR = handleScreenRadius(zoom);
   const activeHandlesRelationId = reconnect?.relationId ?? selectedRelationId ?? hoveredRelationId;
 
+  // Über den Karten (z≈40+), damit Linien nicht unter Notiz/Karten verschwinden.
+  // Root bleibt pointer-events-none — Klicks gehen durch, außer auf die Linien selbst.
   return (
-    <svg className="pointer-events-none absolute inset-0 overflow-visible" style={{ zIndex: 10 }}>
+    <svg
+      className="pointer-events-none absolute inset-0 overflow-visible"
+      style={{ zIndex: 100000 }}
+      data-relations={relations.map((r) => r.id).join(" ")}
+    >
       <defs>
         <marker id="et2-arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
           <path d="M0,0 L8,3 L0,6 Z" fill="#64748b" />

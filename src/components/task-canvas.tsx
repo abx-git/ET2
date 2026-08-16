@@ -315,7 +315,6 @@ export function TaskCanvas({
         return;
       }
       connectTasks(draft, nodeId);
-      setRelationConnectMode(false);
     },
     [connectTasks, setRelationConnectMode, setRelationDraftSourceId],
   );
@@ -378,31 +377,35 @@ export function TaskCanvas({
     (nodeId: string, shiftKey: boolean) => {
       if (shiftKey) {
         toggleCanvasNodeSelected(nodeId);
-      } else {
-        // If the card is already part of a multi-selection, keep the selection
-        // (so user can drag the group without losing it)
-        const multiIds = useTaskTreeStore.getState().selectedCanvasNodeIds;
-        if (multiIds.length > 1 && multiIds.includes(nodeId)) {
-          // Already in multi-select, just set as primary for detail sidebar
-          useTaskTreeStore.setState({ selectedCanvasNodeId: nodeId });
-          return;
-        }
-        setSelectedCanvasNodeId(nodeId);
-        if (relationConnectMode && relationDraftSourceId && relationDraftSourceId !== nodeId) {
-          connectTasks(relationDraftSourceId, nodeId);
-          setRelationConnectMode(false);
-        } else if (relationConnectMode && !relationDraftSourceId) {
-          setRelationDraftSourceId(nodeId);
-        }
+        return;
       }
+      // If the card is already part of a multi-selection, keep the selection
+      // (so user can drag the group without losing it)
+      const multiIds = useTaskTreeStore.getState().selectedCanvasNodeIds;
+      if (multiIds.length > 1 && multiIds.includes(nodeId)) {
+        // Already in multi-select, just set as primary for detail sidebar
+        useTaskTreeStore.setState({ selectedCanvasNodeId: nodeId });
+        return;
+      }
+
+      const draft = useTaskTreeStore.getState().relationDraftSourceId;
+      const connecting = useTaskTreeStore.getState().relationConnectMode;
+      // Verbindung zuerst abschließen — nicht vorher selectedRelationId löschen.
+      if (connecting && draft && draft !== nodeId) {
+        connectTasks(draft, nodeId);
+        return;
+      }
+      if (connecting && !draft) {
+        setSelectedCanvasNodeId(nodeId);
+        setRelationDraftSourceId(nodeId);
+        return;
+      }
+      setSelectedCanvasNodeId(nodeId);
     },
     [
       toggleCanvasNodeSelected,
       setSelectedCanvasNodeId,
-      relationConnectMode,
-      relationDraftSourceId,
       connectTasks,
-      setRelationConnectMode,
       setRelationDraftSourceId,
     ],
   );
@@ -788,30 +791,6 @@ export function TaskCanvas({
             />
           ))}
 
-          <TaskConnectors
-            nodes={nodes}
-            relations={visibleRelations}
-            roots={roots}
-            selectedRelationId={selectedRelationId}
-            relationDraftSourceId={relationDraftSourceId}
-            zoom={canvasViewport.zoom}
-            clientToWorld={(clientX, clientY) => {
-              const el = shellRef.current;
-              if (!el) return { x: 0, y: 0 };
-              return screenToWorld(
-                useTaskTreeStore.getState().canvasViewport,
-                clientX,
-                clientY,
-                el.getBoundingClientRect(),
-              );
-            }}
-            onSelectRelation={(id) => {
-              setSelectedRelationId(id);
-            }}
-            onReconnectRelation={(relationId, end, newNodeId) =>
-              reconnectRelation(relationId, end, newNodeId)
-            }
-          />
           {[...nodes].sort(compareCanvasStackOrder).map((node) =>
             isSymbolNode(node) ? (
               <TaskCanvasSymbol
@@ -868,6 +847,31 @@ export function TaskCanvas({
               />
             ),
           )}
+          {/* Nach den Karten, hoher z-index: Linien nicht unter Notizen/Karten verstecken */}
+          <TaskConnectors
+            nodes={nodes}
+            relations={visibleRelations}
+            roots={roots}
+            selectedRelationId={selectedRelationId}
+            relationDraftSourceId={relationDraftSourceId}
+            zoom={canvasViewport.zoom}
+            clientToWorld={(clientX, clientY) => {
+              const el = shellRef.current;
+              if (!el) return { x: 0, y: 0 };
+              return screenToWorld(
+                useTaskTreeStore.getState().canvasViewport,
+                clientX,
+                clientY,
+                el.getBoundingClientRect(),
+              );
+            }}
+            onSelectRelation={(id) => {
+              setSelectedRelationId(id);
+            }}
+            onReconnectRelation={(relationId, end, newNodeId) =>
+              reconnectRelation(relationId, end, newNodeId)
+            }
+          />
           {nodes.length === 0 ? (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-md border border-dashed border-slate-300 bg-white/80 px-4 py-3 text-sm text-slate-500">
               Keine Karten auf dieser Ebene — Doppelklick zum Anlegen

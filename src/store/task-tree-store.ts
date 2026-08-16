@@ -1240,7 +1240,10 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     set({
       relations: sanitizeRelations(state.roots, [...existing, relation]),
       relationDraftSourceId: null,
+      relationConnectMode: false,
       selectedRelationId: id,
+      selectedCanvasNodeId: null,
+      selectedCanvasNodeIds: [] as string[],
     });
     return id;
   },
