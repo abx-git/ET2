@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, Copy, Trash2 } from "lucide-react";
+import { Check, Copy, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { NoteMarkdownContent } from "@/components/note-markdown-content";
 import { mergeCardFieldVisibility } from "@/lib/card-field-visibility";
 import { CARD_COLOR_OPTIONS, type CardColorId } from "@/lib/card-color";
 import { fromInputDateTimeLocal, toInputDateTimeLocal } from "@/lib/task-datetime";
@@ -24,7 +25,7 @@ import {
   tagsAvailableForFilter,
   uniqNonEmptyTags,
 } from "@/lib/task-tags";
-import { isCardNode, isNoteNode, isSymbolNode, normalizeNoteMarkdown } from "@/lib/tree-node-kind";
+import { isCardNode, isNoteNode, isSymbolNode } from "@/lib/tree-node-kind";
 import { getSymbolTypeDefinition } from "@/lib/diagram-symbol";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import {
@@ -44,7 +45,11 @@ function splitTagInput(raw: string): string[] {
     .filter(Boolean);
 }
 
-export function TaskDetailSidebar() {
+export function TaskDetailSidebar({
+  onOpenNoteEditor,
+}: {
+  onOpenNoteEditor?: (nodeId: string) => void;
+} = {}) {
   const roots = useTaskTreeStore((s) => s.roots);
   const relations = useTaskTreeStore((s) => s.relations);
   const selectedCanvasNodeId = useTaskTreeStore((s) => s.selectedCanvasNodeId);
@@ -194,17 +199,22 @@ export function TaskDetailSidebar() {
               />
             </div>
             <div>
-              <label className={labelClass} htmlFor="et2-note-md">
-                Markdown
-              </label>
-              <textarea
-                id="et2-note-md"
-                className={`${fieldClass} min-h-[10rem] font-mono text-xs`}
-                value={node.markdown ?? ""}
-                onChange={(e) =>
-                  updateNote(node.id, { markdown: normalizeNoteMarkdown(e.target.value) })
-                }
-              />
+              <label className={labelClass}>Inhalt</label>
+              <div className="mt-1 max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm">
+                {node.markdown?.trim() ? (
+                  <NoteMarkdownContent markdown={node.markdown} compact />
+                ) : (
+                  <p className="text-xs italic text-slate-400">Leere Notiz</p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                onClick={() => onOpenNoteEditor?.(node.id)}
+              >
+                <Pencil className="h-3.5 w-3.5" aria-hidden />
+                WYSIWYG-Editor öffnen
+              </button>
             </div>
             <div className="flex flex-col gap-2 pt-1">
               <button

@@ -55,7 +55,12 @@ interface LassoRect {
   y2: number;
 }
 
-export function TaskCanvas() {
+export function TaskCanvas({
+  onOpenNoteEditor,
+}: {
+  /** Öffnet den WYSIWYG-Notiz-Dialog (Parent hält NoteEditorDialog). */
+  onOpenNoteEditor?: (nodeId: string) => void;
+} = {}) {
   const roots = useTaskTreeStore((s) => s.roots);
   const contextNodeId = useTaskTreeStore((s) => s.contextNodeId);
   const relations = useTaskTreeStore((s) => s.relations);
@@ -842,6 +847,7 @@ export function TaskCanvas() {
                 onTitleEditConsumed={() => setPendingTitleEditId(null)}
                 onSelect={(shiftKey) => handleCardSelect(node.id, shiftKey ?? false)}
                 onDrill={() => drillIntoNode(node.id)}
+                onOpenNote={() => onOpenNoteEditor?.(node.id)}
                 onMove={(x, y, delta) => handleCardMove(node.id, x, y, delta)}
                 onResize={(patch) => resizeCanvasNode(node.id, patch)}
                 onRotate={(r) => rotateCanvasNode(node.id, r)}
@@ -880,8 +886,21 @@ export function TaskCanvas() {
                 {(() => {
                   const menuNode = nodes.find((x) => x.id === contextMenu.nodeId);
                   const symbol = menuNode ? isSymbolNode(menuNode) : false;
+                  const note = menuNode ? isNoteNode(menuNode) : false;
                   return (
                     <>
+                      {note ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                          onClick={() => {
+                            onOpenNoteEditor?.(contextMenu.nodeId!);
+                            setContextMenu(null);
+                          }}
+                        >
+                          ✎ Notiz bearbeiten
+                        </button>
+                      ) : null}
                       {!symbol ? (
                         <button
                           type="button"
@@ -1024,6 +1043,7 @@ export function TaskCanvas() {
                     const id = addNoteAfter(contextNodeId);
                     moveCanvasNode(id, world.x - 120, world.y - 80);
                     setSelectedCanvasNodeId(id);
+                    onOpenNoteEditor?.(id);
                     setContextMenu(null);
                   }}
                 >
@@ -1137,7 +1157,7 @@ export function TaskCanvas() {
         )}
       </div>
       </div>
-      <TaskDetailSidebar />
+      <TaskDetailSidebar onOpenNoteEditor={onOpenNoteEditor} />
       <KeyboardShortcutsHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   );

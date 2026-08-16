@@ -64,6 +64,8 @@ export interface TaskCanvasCardProps {
   nestTarget?: boolean;
   onSelect: (shiftKey?: boolean) => void;
   onDrill: () => void;
+  /** Notiz: WYSIWYG-Popup öffnen. */
+  onOpenNote?: () => void;
   onMove: (x: number, y: number, delta?: { dx: number; dy: number }) => void;
   onResize: (patch: { x: number; y: number; width: number; height: number }) => void;
   onRotate: (rotation: number) => void;
@@ -90,6 +92,7 @@ export function TaskCanvasCard({
   nestTarget,
   onSelect,
   onDrill,
+  onOpenNote,
   onMove,
   onResize,
   onRotate,
@@ -378,6 +381,10 @@ export function TaskCanvasCard({
       onDoubleClick={(e) => {
         e.stopPropagation();
         if (editing || (e.target as Element | null)?.closest("[data-card-title]")) return;
+        if (note) {
+          onOpenNote?.();
+          return;
+        }
         onDrill();
       }}
       onContextMenu={(e) => {
@@ -463,13 +470,26 @@ export function TaskCanvasCard({
           </div>
         ) : null}
 
-        {/* Note markdown content */}
-        {note && node.markdown?.trim() ? (
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <NoteMarkdownContent markdown={node.markdown} compact />
-          </div>
-        ) : note ? (
-          <p className="text-[11px] italic text-slate-400">Leere Notiz</p>
+        {/* Note markdown — Klick öffnet WYSIWYG-Popup */}
+        {note ? (
+          <button
+            type="button"
+            className="min-h-0 flex-1 overflow-hidden rounded-md text-left hover:bg-yellow-100/60"
+            title="Notiz bearbeiten"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenNote?.();
+            }}
+          >
+            {node.markdown?.trim() ? (
+              <NoteMarkdownContent markdown={node.markdown} compact />
+            ) : (
+              <p className="px-0.5 text-[11px] italic text-slate-400">
+                Leere Notiz — klicken zum Bearbeiten
+              </p>
+            )}
+          </button>
         ) : null}
 
         {/* Due / reminder / effort (incl. rolled-up Σ) */}

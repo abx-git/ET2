@@ -1845,7 +1845,7 @@ export function TaskBoard() {
                       />
                     </div>
                     <div className="min-h-0 flex-1 overflow-hidden">
-                      <TaskCanvas />
+                      <TaskCanvas onOpenNoteEditor={openEditor} />
                     </div>
                   </>
                 ) : showSplitView ? (
