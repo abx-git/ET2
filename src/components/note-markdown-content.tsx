@@ -74,8 +74,13 @@ function markdownComponents(accent: ReturnType<typeof noteAccentClasses>): Compo
 
 export interface NoteMarkdownContentProps {
   markdown: string | undefined;
-  /** Kompakte Darstellung auf Karten in der Liste. */
+  /** Kompakte Darstellung auf Karten in der Liste (feste Max-Höhe + Scroll). */
   compact?: boolean;
+  /**
+   * Füllt die verfügbare Elternhöhe (Canvas-Karten): Scroll nur wenn der Inhalt
+   * höher als die Karte ist — größere Karten zeigen mehr Text ohne Scrollbalken.
+   */
+  fillContainer?: boolean;
   className?: string;
 }
 
@@ -83,6 +88,7 @@ export interface NoteMarkdownContentProps {
 export function NoteMarkdownContent({
   markdown,
   compact = false,
+  fillContainer = false,
   className = "",
 }: NoteMarkdownContentProps) {
   const noteAccentColor = useTaskTreeStore((s) => s.noteAccentColor);
@@ -101,7 +107,11 @@ export function NoteMarkdownContent({
     <div
       className={[
         "note-markdown text-[11px] text-slate-700",
-        compact ? "max-h-56 overflow-y-auto pr-1" : "",
+        fillContainer
+          ? "h-full min-h-0 overflow-y-auto"
+          : compact
+            ? "max-h-56 overflow-y-auto pr-1"
+            : "",
         className,
       ]
         .filter(Boolean)

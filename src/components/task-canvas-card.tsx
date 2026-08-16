@@ -474,7 +474,7 @@ export function TaskCanvasCard({
         {note ? (
           <button
             type="button"
-            className="min-h-0 flex-1 overflow-hidden rounded-md text-left hover:bg-yellow-100/60"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md text-left hover:bg-yellow-100/60"
             title="Notiz bearbeiten"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
@@ -483,7 +483,7 @@ export function TaskCanvasCard({
             }}
           >
             {node.markdown?.trim() ? (
-              <NoteMarkdownContent markdown={node.markdown} compact />
+              <NoteMarkdownContent markdown={node.markdown} fillContainer />
             ) : (
               <p className="px-0.5 text-[11px] italic text-slate-400">
                 Leere Notiz — klicken zum Bearbeiten
