@@ -2,6 +2,7 @@
 
 import { useDroppable } from "@dnd-kit/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { TaskCanvasCard } from "@/components/task-canvas-card";
 import { TaskCanvasSymbol } from "@/components/task-canvas-symbol";
@@ -31,6 +32,7 @@ import {
   SYMBOL_GROUP_LABELS,
   type SymbolType,
 } from "@/lib/diagram-symbol";
+import { exportVisibleCanvasToPdf } from "@/lib/canvas-pdf-export";
 import { exportCanvasAsPrompt } from "@/lib/prompt-export";
 import { relationsForContext } from "@/lib/task-relations";
 import { isTaskMarkedDone } from "@/lib/task-tags";
@@ -121,6 +123,7 @@ export function TaskCanvas({
   const [symbolPaletteOpen, setSymbolPaletteOpen] = useState(false);
   const [placingSymbolType, setPlacingSymbolType] = useState<SymbolType | null>(null);
   const [contextSymbolGroup, setContextSymbolGroup] = useState<"useCase" | "flowchart" | null>(null);
+  const [pdfExporting, setPdfExporting] = useState(false);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const spaceDown = useRef(false);
   const multiDrag = useRef<{ ox: number; oy: number } | null>(null);
@@ -373,6 +376,35 @@ export function TaskCanvas({
     setCanvasViewport(fitViewportToBounds(bounds, width, height));
   }, [nodes, canvasGroups, setCanvasViewport]);
 
+  const exportVisibleViewportPdf = useCallback(async () => {
+    const el = shellRef.current;
+    if (!el || pdfExporting) return;
+    setPdfExporting(true);
+    // UI-Chrome vor dem Screenshot entfernen (Handles, Menüs, Lasso)
+    flushSync(() => {
+      setContextMenu(null);
+      setLasso(null);
+      setSymbolPaletteOpen(false);
+      setSelectedCanvasNodeId(null);
+      setSelectedRelationId(null);
+      clearCanvasMultiSelect();
+      setSelectedGroupId(null);
+    });
+    try {
+      await exportVisibleCanvasToPdf(el);
+    } catch (err) {
+      console.error("Canvas-PDF-Export fehlgeschlagen", err);
+      window.alert("PDF-Export fehlgeschlagen. Bitte erneut versuchen.");
+    } finally {
+      setPdfExporting(false);
+    }
+  }, [
+    pdfExporting,
+    setSelectedCanvasNodeId,
+    setSelectedRelationId,
+    clearCanvasMultiSelect,
+  ]);
+
   const handleCardSelect = useCallback(
     (nodeId: string, shiftKey: boolean) => {
       if (shiftKey) {
@@ -507,6 +539,17 @@ export function TaskCanvas({
           }}
         >
           Prompt-Export
+        </button>
+        <button
+          type="button"
+          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-60"
+          title="Aktuell sichtbaren Canvas-Ausschnitt als PDF herunterladen"
+          disabled={pdfExporting}
+          onClick={() => {
+            void exportVisibleViewportPdf();
+          }}
+        >
+          {pdfExporting ? "PDF…" : "PDF-Export"}
         </button>
         <button
           type="button"
@@ -749,6 +792,7 @@ export function TaskCanvas({
         {/* Lasso selection rectangle */}
         {lasso && Math.abs(lasso.x2 - lasso.x1) + Math.abs(lasso.y2 - lasso.y1) > 5 && (
           <div
+            data-et2-export-hide="true"
             className="pointer-events-none absolute z-50 border-2 border-dashed border-teal-500 bg-teal-500/10"
             style={{
               left: Math.min(lasso.x1, lasso.x2) - (shellRef.current?.getBoundingClientRect().left ?? 0),
@@ -882,6 +926,7 @@ export function TaskCanvas({
         {/* Right-click context menu */}
         {contextMenu && (
           <div
+            data-et2-export-hide="true"
             className="absolute z-[100] min-w-[180px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl text-[13px] text-slate-800"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
@@ -1156,6 +1201,16 @@ export function TaskCanvas({
                   }}
                 >
                   📋 Prompt-Export
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100 disabled:opacity-60"
+                  disabled={pdfExporting}
+                  onClick={() => {
+                    void exportVisibleViewportPdf();
+                  }}
+                >
+                  📄 PDF-Export (Ansicht)
                 </button>
               </>
             )}

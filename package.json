@@ -21,6 +21,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@mdxeditor/editor": "^4.2.0",
     "@serwist/next": "^9.5.11",
+    "html-to-image": "^1.11.13",
     "lucide-react": "^0.511.0",
     "next": "^15.5.23",
     "react": "^19.1.0",
