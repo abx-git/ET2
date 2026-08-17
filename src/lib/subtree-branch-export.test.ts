@@ -6,6 +6,8 @@ import {
   exportSubtreeBranch,
   taskSubtreeToBranchJson,
   taskSubtreeToHeadingMarkdown,
+  taskSubtreeToMarkdownFiles,
+  uniqueMarkdownExportSlug,
 } from "@/lib/subtree-branch-export";
 import { DEFAULT_COMPLETED_TAG } from "@/lib/task-tags";
 import { parseExportedDocument, isSubtreeSnapshot } from "@/lib/task-tree-json";
@@ -205,5 +207,73 @@ describe("branchExportFilename", () => {
     const root = node({ id: "1", title: "Mein Projekt" });
     expect(branchExportFilename(root, "markdown", "card")).toMatch(/karte\.md$/);
     expect(branchExportFilename(root, "json", "subtree")).toMatch(/zweig\.json$/);
+  });
+});
+
+describe("uniqueMarkdownExportSlug", () => {
+  it("appends id suffix on collision", () => {
+    const used = new Set<string>();
+    expect(uniqueMarkdownExportSlug("Same", "aaaa1111", used)).toBe("same");
+    expect(uniqueMarkdownExportSlug("Same", "bbbb2222", used)).toBe("same-2222");
+  });
+});
+
+describe("taskSubtreeToMarkdownFiles", () => {
+  it("creates Obsidian-style nested paths", () => {
+    const root = node({ id: "p", title: "Projekt" }, [
+      node({ id: "c1", title: "Phase 1" }, [node({ id: "t", title: "Task A" })]),
+      node({ id: "c2", title: "Phase 2" }),
+    ]);
+    const files = taskSubtreeToMarkdownFiles(root, baseOpts);
+    const paths = files.map((f) => f.relativePath).sort();
+    expect(paths).toEqual([
+      "projekt.md",
+      "projekt/phase-1.md",
+      "projekt/phase-1/task-a.md",
+      "projekt/phase-2.md",
+    ]);
+    expect(files.find((f) => f.relativePath === "projekt.md")?.content).toContain("# Projekt");
+    expect(files.find((f) => f.relativePath === "projekt.md")?.content).not.toContain("Phase 1");
+  });
+
+  it("omits unchecked attributes in file content", () => {
+    const root = node({ id: "x", title: "Nur Titel", description: "hidden", tags: ["A"] });
+    const files = taskSubtreeToMarkdownFiles(root, {
+      ...baseOpts,
+      attributes: { ...DEFAULT_SUBTREE_EXPORT_ATTRIBUTES, description: false, tags: false },
+    });
+    expect(files).toHaveLength(1);
+    expect(files[0]!.content).toContain("# Nur Titel");
+    expect(files[0]!.content).not.toContain("hidden");
+    expect(files[0]!.content).not.toContain("**Tags:**");
+  });
+
+  it("scope card exports only the root file", () => {
+    const root = node({ id: "p", title: "Parent" }, [node({ id: "c", title: "Child" })]);
+    const files = taskSubtreeToMarkdownFiles(root, { ...baseOpts, scope: "card" });
+    expect(files.map((f) => f.relativePath)).toEqual(["parent.md"]);
+  });
+
+  it("skips symbol nodes", () => {
+    const root = node({ id: "p", title: "Parent" }, [
+      node({ id: "s", title: "Raute", kind: "symbol", symbolType: "decision" }),
+      node({ id: "c", title: "Child" }),
+    ]);
+    const files = taskSubtreeToMarkdownFiles(root, baseOpts);
+    const paths = files.map((f) => f.relativePath);
+    expect(paths).toEqual(["parent.md", "parent/child.md"]);
+    expect(paths.join(" ")).not.toContain("raute");
+  });
+
+  it("disambiguates sibling name collisions", () => {
+    const root = node({ id: "p", title: "Parent" }, [
+      node({ id: "id-aaaa", title: "Twin" }),
+      node({ id: "id-bbbb", title: "Twin" }),
+    ]);
+    const files = taskSubtreeToMarkdownFiles(root, baseOpts);
+    const paths = files.map((f) => f.relativePath).sort();
+    expect(paths).toContain("parent.md");
+    expect(paths).toContain("parent/twin.md");
+    expect(paths.some((p) => p.startsWith("parent/twin-") && p.endsWith(".md"))).toBe(true);
   });
 });

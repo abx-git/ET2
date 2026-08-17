@@ -11,6 +11,7 @@ import { taskLinkHref } from "@/lib/task-link";
 import { isTaskMarkedDone } from "@/lib/task-tags";
 import {
   isNoteNode,
+  isSymbolNode,
   nodeDisplayTitle,
   normalizeNoteMarkdown,
 } from "@/lib/tree-node-kind";
@@ -305,6 +306,105 @@ export function prepareBranchExportRoot(
     return { ...root, children: [] };
   }
   return root;
+}
+
+/** Markdown einer einzelnen Karte (ohne Kind-Rekursion) für Mehrdateien-Export. */
+export function taskNodeToMarkdownFileContent(
+  node: TaskNode,
+  options: SubtreeBranchExportOptions,
+): string {
+  const { attributes: attrs } = options;
+  const lines: string[] = [
+    `# ${formatMarkdownHeadingTitle(node, attrs, options.completedTag)}`,
+  ];
+  appendMarkdownAttributeLines(lines, node, attrs, options, 0);
+  lines.push("");
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
+export type MarkdownExportFile = {
+  /** Relativer Pfad mit `/` (z. B. `projekt/phase-1.md`). */
+  relativePath: string;
+  content: string;
+};
+
+function shortIdSuffix(id: string): string {
+  const cleaned = id.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  if (cleaned.length >= 4) return cleaned.slice(-4);
+  return cleaned || "x";
+}
+
+/** Eindeutiger Datei-/Ordner-Slug innerhalb eines Verzeichnisses. */
+export function uniqueMarkdownExportSlug(
+  title: string,
+  id: string,
+  usedInDirectory: Set<string>,
+): string {
+  const base = slugForBackupFilename(title || "karte").slice(0, 48) || "karte";
+  if (!usedInDirectory.has(base)) {
+    usedInDirectory.add(base);
+    return base;
+  }
+  const withId = `${base}-${shortIdSuffix(id)}`.slice(0, 60);
+  if (!usedInDirectory.has(withId)) {
+    usedInDirectory.add(withId);
+    return withId;
+  }
+  let n = 2;
+  let candidate = `${withId}-${n}`.slice(0, 60);
+  while (usedInDirectory.has(candidate)) {
+    n += 1;
+    candidate = `${withId}-${n}`.slice(0, 60);
+  }
+  usedInDirectory.add(candidate);
+  return candidate;
+}
+
+function exportableChildren(node: TaskNode): TaskNode[] {
+  return node.children.filter((child) => !isSymbolNode(child));
+}
+
+function joinExportPath(dirPrefix: string, name: string): string {
+  return dirPrefix ? `${dirPrefix}/${name}` : name;
+}
+
+function walkMarkdownFiles(
+  node: TaskNode,
+  dirPrefix: string,
+  usedInDirectory: Set<string>,
+  options: SubtreeBranchExportOptions,
+  out: MarkdownExportFile[],
+): void {
+  if (isSymbolNode(node)) return;
+
+  const slug = uniqueMarkdownExportSlug(nodeDisplayTitle(node), node.id, usedInDirectory);
+  out.push({
+    relativePath: joinExportPath(dirPrefix, `${slug}.md`),
+    content: taskNodeToMarkdownFileContent(node, options),
+  });
+
+  const kids = exportableChildren(node);
+  if (kids.length === 0) return;
+
+  const childDir = joinExportPath(dirPrefix, slug);
+  const usedInChildDir = new Set<string>();
+  for (const child of kids) {
+    walkMarkdownFiles(child, childDir, usedInChildDir, options, out);
+  }
+}
+
+/**
+ * Obsidian-Stil: `Karte.md` + bei Kindern Ordner `Karte/` mit Kind-Dateien.
+ * Symbole werden übersprungen; Scope über `prepareBranchExportRoot`.
+ */
+export function taskSubtreeToMarkdownFiles(
+  root: TaskNode,
+  options: SubtreeBranchExportOptions,
+): MarkdownExportFile[] {
+  const exportRoot = prepareBranchExportRoot(root, options.scope ?? "subtree");
+  const out: MarkdownExportFile[] = [];
+  walkMarkdownFiles(exportRoot, "", new Set(), options, out);
+  return out;
 }
 
 /** Dateiname für Direkt-Download (Markdown oder JSON). */

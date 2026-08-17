@@ -9,11 +9,17 @@ import {
   mergeSubtreeExportAttributes,
   SUBTREE_EXPORT_ATTRIBUTE_KEYS,
   SUBTREE_EXPORT_ATTRIBUTE_LABELS,
+  taskSubtreeToMarkdownFiles,
   type BranchExportFormat,
   type BranchExportScope,
   type SubtreeExportAttributeKey,
   type SubtreeExportAttributes,
 } from "@/lib/subtree-branch-export";
+import {
+  directoryPickerUnavailableMessage,
+  exportMarkdownFilesToPickedDirectory,
+  isDirectoryPickerSupported,
+} from "@/lib/subtree-markdown-files";
 import { downloadJsonFile, downloadTextFile } from "@/lib/task-tree-json";
 import type { TaskNode } from "@/types/task-node";
 
@@ -199,6 +205,8 @@ export function BranchExportDialog({
   }));
   const [jsonImportCompatible, setJsonImportCompatible] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [folderExporting, setFolderExporting] = useState(false);
+  const [folderExportHint, setFolderExportHint] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -207,6 +215,8 @@ export function BranchExportDialog({
       setAttributes({ ...DEFAULT_SUBTREE_EXPORT_ATTRIBUTES });
       setJsonImportCompatible(false);
       setCopied(false);
+      setFolderExporting(false);
+      setFolderExportHint(null);
       return;
     }
     if (root) {
@@ -255,6 +265,41 @@ export function BranchExportDialog({
       downloadJsonFile(filename, exportText);
     } else {
       downloadTextFile(filename, exportText, "text/markdown");
+    }
+  };
+
+  const handleSaveToFolder = async () => {
+    if (format !== "markdown" || folderExporting) return;
+    if (!isDirectoryPickerSupported()) {
+      window.alert(directoryPickerUnavailableMessage());
+      return;
+    }
+    setFolderExporting(true);
+    setFolderExportHint(null);
+    try {
+      const files = taskSubtreeToMarkdownFiles(root, {
+        format: "markdown",
+        scope,
+        attributes: mergeSubtreeExportAttributes(attributes),
+        completedTag,
+        effortOnTasksEnabled,
+      });
+      if (files.length === 0) {
+        window.alert("Keine Dateien zum Exportieren.");
+        return;
+      }
+      const result = await exportMarkdownFilesToPickedDirectory(files);
+      if (result.cancelled) return;
+      setFolderExportHint(
+        `${result.count} Datei${result.count === 1 ? "" : "en"} in „${result.directoryName}“ geschrieben.`,
+      );
+    } catch (err) {
+      console.error("Markdown-Ordner-Export fehlgeschlagen", err);
+      window.alert(
+        err instanceof Error ? err.message : "Ordner-Export fehlgeschlagen. Bitte erneut versuchen.",
+      );
+    } finally {
+      setFolderExporting(false);
     }
   };
 
@@ -321,7 +366,7 @@ export function BranchExportDialog({
           {format === "markdown" ? (
             <p className="mt-2 text-[10px] text-slate-500">
               Hierarchie über Überschriften (# bis ######); Link im Titel als Markdown-Link, weitere Felder als
-              Aufzählung.
+              Aufzählung. „In Ordner speichern“ legt pro Karte eine Datei an (Obsidian-Stil).
             </p>
           ) : (
             <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px] text-slate-600">
@@ -334,6 +379,11 @@ export function BranchExportDialog({
               Import-kompatibles Teilbaum-JSON (alle Felder, erneuter Import in ET2)
             </label>
           )}
+          {folderExportHint ? (
+            <p className="mt-2 text-[11px] text-emerald-700" role="status">
+              {folderExportHint}
+            </p>
+          ) : null}
           <div
             className={[
               "mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 sm:grid-cols-3",
@@ -389,6 +439,21 @@ export function BranchExportDialog({
               className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-900 hover:bg-sky-100"
             >
               Als Vorlage speichern
+            </button>
+          ) : null}
+          {format === "markdown" ? (
+            <button
+              type="button"
+              disabled={folderExporting}
+              onClick={() => void handleSaveToFolder()}
+              title={
+                isDirectoryPickerSupported()
+                  ? "Pro Karte eine Markdown-Datei in ein gewähltes Verzeichnis schreiben"
+                  : directoryPickerUnavailableMessage()
+              }
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {folderExporting ? "Schreibe…" : "In Ordner speichern…"}
             </button>
           ) : null}
           <button
