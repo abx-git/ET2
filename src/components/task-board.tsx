@@ -13,7 +13,7 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { FileStack, HardDrive, LayoutGrid, List, Presentation, Redo2, Undo2 } from "lucide-react";
+import { FileStack, HardDrive, LayoutGrid, List, ListTree, Loader2, Presentation, Redo2, Save, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import { useStore } from "zustand";
 
@@ -116,9 +116,11 @@ import {
   focusTargetAfterRemoving,
   navigateContextCard,
   navigateExpandedCard,
+  navigateOutlineTree,
   shouldIgnoreCardKeyboard,
 } from "@/lib/card-keyboard-nav";
 import { flattenVisibleCards } from "@/lib/card-expand";
+import { readLightModeEnabled } from "@/lib/light-mode";
 import {
   contextChildren,
   contextPathNodes,
@@ -147,6 +149,8 @@ import { isNoteNode, nodeDisplayTitle } from "@/lib/tree-node-kind";
 import {
   dataStorageButtonClassName,
   deriveStorageDisplayStatus,
+  footerSaveIconIsUnsaved,
+  formatFooterSaveButtonTitle,
   formatStorageStatusTooltip,
   hasUnsavedWorkingFile,
 } from "@/lib/storage-coordinator";
@@ -221,6 +225,8 @@ export function TaskBoard() {
   const setActivePane = useTaskTreeStore((s) => s.setActivePane);
   const splitViewEnabled = useTaskTreeStore((s) => s.splitViewEnabled);
   const setSplitViewEnabled = useTaskTreeStore((s) => s.setSplitViewEnabled);
+  const lightModeEnabled = useTaskTreeStore((s) => s.lightModeEnabled);
+  const setLightModeEnabled = useTaskTreeStore((s) => s.setLightModeEnabled);
   const boardViewMode = useTaskTreeStore((s) => s.boardViewMode ?? "list");
   const setBoardViewMode = useTaskTreeStore((s) => s.setBoardViewMode);
   const relations = useTaskTreeStore((s) => s.relations);
@@ -350,13 +356,18 @@ export function TaskBoard() {
     setBackupIntervalMinutes(readBackupIntervalMinutes());
     setBackupHistoryMode(readBackupHistoryMode());
     void hydrateTemplatesFromIdb();
+    if (readLightModeEnabled()) {
+      useTaskTreeStore.getState().setLightModeEnabled(true);
+    }
   }, []);
 
   useEffect(() => {
     if (!scrollToNodeId) return;
     const reveal = () => {
       const target = document.querySelector(
-        `[data-board-pane="${activePane}"][data-task-card-id="${CSS.escape(scrollToNodeId)}"]`,
+        lightModeEnabled
+          ? `[data-outline-node-id="${CSS.escape(scrollToNodeId)}"]`
+          : `[data-board-pane="${activePane}"][data-task-card-id="${CSS.escape(scrollToNodeId)}"]`,
       );
       if (!(target instanceof HTMLElement)) return false;
       target.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -371,7 +382,7 @@ export function TaskBoard() {
       if (frame < 8) requestAnimationFrame(tryReveal);
     };
     requestAnimationFrame(tryReveal);
-  }, [scrollToNodeId, activePane]);
+  }, [scrollToNodeId, activePane, lightModeEnabled]);
 
   const handleSearchSelect = useCallback(
     (nodeId: string) => {
@@ -666,6 +677,25 @@ export function TaskBoard() {
       setStoragePanelBusy(false);
     }
   }, [boardSnapshotTextFromStore, roots]);
+
+  const handleSaveFromFooter = useCallback(async () => {
+    if (workingFileSaving) return;
+    if (!isWorkingFileAttached()) {
+      await handleSaveWorkingFileAs();
+      return;
+    }
+    setWorkingFileSaving(true);
+    try {
+      const result = await persistWorkingFileJson(boardSnapshotTextFromStore());
+      if (!result.ok) {
+        window.alert(result.message ?? "Speichern in die Arbeitsdatei ist fehlgeschlagen.");
+        return;
+      }
+      setWorkingFileDirty(false);
+    } finally {
+      setWorkingFileSaving(false);
+    }
+  }, [boardSnapshotTextFromStore, handleSaveWorkingFileAs, workingFileSaving]);
 
   const handlePostImportSaveToFile = useCallback(async () => {
     setPostImportSaveOpen(false);
@@ -1115,6 +1145,10 @@ export function TaskBoard() {
 
   const collapsedSet = useMemo(() => new Set(collapsedIds), [collapsedIds]);
   const cardCollapsedSet = useMemo(() => new Set(cardCollapsedIds), [cardCollapsedIds]);
+  const outlineVisibleCards = useMemo(
+    () => flattenVisibleCards(roots, collapsedSet),
+    [roots, collapsedSet],
+  );
 
   const filteredRoots = useMemo(
     () =>
@@ -1199,7 +1233,7 @@ export function TaskBoard() {
   const boardMaxVisibleLevels = useMemo(() => getBoardMaxVisibleLevels(roots), [roots]);
 
   const cardKeyboardBlocked =
-    boardViewMode === "presentation" ||
+    (!lightModeEnabled && boardViewMode === "presentation") ||
     titleEditNodeId !== null ||
     editorOpen ||
     pendingDeleteId !== null ||
@@ -1230,17 +1264,35 @@ export function TaskBoard() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (shouldIgnoreCardKeyboard(e)) return;
 
+      if (e.key === "?" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setHelpOpen(true);
+        return;
+      }
+
       const arrowKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"] as const;
       const isArrow = arrowKeys.includes(e.key as (typeof arrowKeys)[number]);
 
       let currentId = keyboardFocusNodeId;
       if (isArrow && !currentId) {
-        currentId =
-          cardInteractionMode === "expand"
+        currentId = lightModeEnabled
+          ? (outlineVisibleCards[0]?.node.id ?? null)
+          : cardInteractionMode === "expand"
             ? (visibleExpandCards[0]?.node.id ?? null)
             : firstContextCardId(contextListNodes);
         if (!currentId) return;
       } else if (!currentId) {
+        if (
+          lightModeEnabled &&
+          e.key === "Enter" &&
+          !e.metaKey &&
+          !e.ctrlKey &&
+          !e.shiftKey
+        ) {
+          e.preventDefault();
+          const id = addCardAfter(null);
+          beginEditingNewCard(id);
+        }
         return;
       }
 
@@ -1255,19 +1307,28 @@ export function TaskBoard() {
                 ? "left"
                 : "right";
 
-        const nav =
-          cardInteractionMode === "expand"
+        const nav = lightModeEnabled
+          ? navigateOutlineTree(outlineVisibleCards, collapsedSet, currentId, direction)
+          : cardInteractionMode === "expand"
             ? navigateExpandedCard(visibleExpandCards, cardCollapsedSet, currentId, direction)
             : navigateContextCard(contextListNodes, currentId, direction);
 
         const { nextId, shouldDrillIn, shouldDrillUp, shouldExpand, shouldCollapse } = nav;
 
         if (shouldExpand && nextId) {
-          if (cardCollapsedSet.has(nextId)) toggleCardCollapsed(nextId);
+          if (lightModeEnabled) {
+            if (collapsedSet.has(nextId)) toggleNodeCollapsed(nextId);
+          } else if (cardCollapsedSet.has(nextId)) {
+            toggleCardCollapsed(nextId);
+          }
           return;
         }
         if (shouldCollapse && nextId) {
-          if (!cardCollapsedSet.has(nextId)) toggleCardCollapsed(nextId);
+          if (lightModeEnabled) {
+            if (!collapsedSet.has(nextId)) toggleNodeCollapsed(nextId);
+          } else if (!cardCollapsedSet.has(nextId)) {
+            toggleCardCollapsed(nextId);
+          }
           return;
         }
         if (shouldDrillUp) {
@@ -1300,7 +1361,8 @@ export function TaskBoard() {
 
       if (e.key === " " || e.key === "Spacebar") {
         e.preventDefault();
-        toggleCardCollapsed(currentId);
+        if (lightModeEnabled) toggleNodeCollapsed(currentId);
+        else toggleCardCollapsed(currentId);
         return;
       }
 
@@ -1340,7 +1402,7 @@ export function TaskBoard() {
         return;
       }
 
-      if (e.key === "Escape" && contextNodeId) {
+      if (e.key === "Escape" && !lightModeEnabled && contextNodeId) {
         e.preventDefault();
         const leaving = contextNodeId;
         drillUp();
@@ -1371,14 +1433,18 @@ export function TaskBoard() {
     keyboardFocusNodeId,
     contextListNodes,
     visibleExpandCards,
+    outlineVisibleCards,
+    collapsedSet,
     cardCollapsedSet,
     cardInteractionMode,
+    lightModeEnabled,
     contextNodeId,
     drillUp,
     drillIntoNode,
     hideCompletedTasks,
     completedTag,
     toggleCardCollapsed,
+    toggleNodeCollapsed,
     addCardAfterSibling,
     addCardAfter,
     addNoteAfterSibling,
@@ -1394,6 +1460,16 @@ export function TaskBoard() {
       if (shouldIgnoreCardKeyboard(e)) return;
       if (!(e.metaKey || e.ctrlKey)) return;
       const key = e.key.toLowerCase();
+      if (key === "l" && e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        const next = !useTaskTreeStore.getState().lightModeEnabled;
+        setLightModeEnabled(next);
+        if (next) {
+          setClipboardOpen(false);
+          setTemplatesOpen(false);
+        }
+        return;
+      }
       if (key === "z" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         undoBoard();
@@ -1406,7 +1482,7 @@ export function TaskBoard() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [setLightModeEnabled]);
 
   useEffect(() => {
     if (keyboardFocusNodeId && !findNodeById(roots, keyboardFocusNodeId)) {
@@ -1506,6 +1582,12 @@ export function TaskBoard() {
     [storageDisplayStatus],
   );
 
+  const footerSaveTitle = useMemo(
+    () => formatFooterSaveButtonTitle(storageDisplayStatus),
+    [storageDisplayStatus],
+  );
+  const footerSaveUnsaved = footerSaveIconIsUnsaved(storageDisplayStatus.tone);
+
   /** Drill-in ohne Fokus-Override (z. B. wenn danach beginEditingNewCard folgt). */
   const drillIntoOnly = useCallback(
     (nodeId: string, pane: BoardPaneId = activePane) => {
@@ -1533,9 +1615,25 @@ export function TaskBoard() {
 
   const handleOutlineSelect = useCallback(
     (nodeId: string) => {
+      if (lightModeEnabled) {
+        setKeyboardFocusNodeId(nodeId);
+        setSearchFocusNodeId(null);
+        return;
+      }
       handleDrillIn(nodeId, activePane);
     },
-    [handleDrillIn, activePane],
+    [handleDrillIn, activePane, lightModeEnabled, setKeyboardFocusNodeId],
+  );
+
+  const handleLightModeChange = useCallback(
+    (on: boolean) => {
+      setLightModeEnabled(on);
+      if (on) {
+        setClipboardOpen(false);
+        setTemplatesOpen(false);
+      }
+    },
+    [setLightModeEnabled],
   );
 
   const renderPane = (paneId: BoardPaneId) => {
@@ -1675,86 +1773,109 @@ export function TaskBoard() {
 
           <span className="mx-0.5 hidden h-4 w-px bg-slate-200 sm:block" aria-hidden />
 
-          <div className="flex items-center rounded-lg border border-[var(--border)] p-0.5">
-            <button
-              type="button"
-              onClick={() => setBoardViewMode("list")}
-              className={[
-                "flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition",
-                boardViewMode === "list"
-                  ? "dock-control-active"
-                  : "text-[var(--muted)] hover:bg-[var(--control-hover)]",
-              ].join(" ")}
-              title="Listenansicht"
-              aria-pressed={boardViewMode === "list"}
-            >
-              <List className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">Liste</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBoardViewMode("canvas")}
-              className={[
-                "flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition",
-                boardViewMode === "canvas"
-                  ? "dock-control-active"
-                  : "text-[var(--muted)] hover:bg-[var(--control-hover)]",
-              ].join(" ")}
-              title="Canvas-Ansicht"
-              aria-pressed={boardViewMode === "canvas"}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">Canvas</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setBoardViewMode("presentation")}
-              className={[
-                "flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition",
-                boardViewMode === "presentation"
-                  ? "dock-control-active"
-                  : "text-[var(--muted)] hover:bg-[var(--control-hover)]",
-              ].join(" ")}
-              title="Präsentationsansicht"
-              aria-pressed={boardViewMode === "presentation"}
-            >
-              <Presentation className="h-3.5 w-3.5" aria-hidden />
-              <span className="hidden sm:inline">Präsentation</span>
-            </button>
-          </div>
+          {!lightModeEnabled ? (
+            <div className="flex items-center rounded-lg border border-[var(--border)] p-0.5">
+              <button
+                type="button"
+                onClick={() => setBoardViewMode("list")}
+                className={[
+                  "flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition",
+                  boardViewMode === "list"
+                    ? "dock-control-active"
+                    : "text-[var(--muted)] hover:bg-[var(--control-hover)]",
+                ].join(" ")}
+                title="Listenansicht"
+                aria-pressed={boardViewMode === "list"}
+              >
+                <List className="h-3.5 w-3.5" aria-hidden />
+                <span className="hidden sm:inline">Liste</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBoardViewMode("canvas")}
+                className={[
+                  "flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition",
+                  boardViewMode === "canvas"
+                    ? "dock-control-active"
+                    : "text-[var(--muted)] hover:bg-[var(--control-hover)]",
+                ].join(" ")}
+                title="Canvas-Ansicht"
+                aria-pressed={boardViewMode === "canvas"}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
+                <span className="hidden sm:inline">Canvas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBoardViewMode("presentation")}
+                className={[
+                  "flex h-7 items-center gap-1 rounded-md px-2 text-xs font-medium transition",
+                  boardViewMode === "presentation"
+                    ? "dock-control-active"
+                    : "text-[var(--muted)] hover:bg-[var(--control-hover)]",
+                ].join(" ")}
+                title="Präsentationsansicht"
+                aria-pressed={boardViewMode === "presentation"}
+              >
+                <Presentation className="h-3.5 w-3.5" aria-hidden />
+                <span className="hidden sm:inline">Präsentation</span>
+              </button>
+            </div>
+          ) : null}
 
-          <ClipboardDropTarget
-            count={clipboardRoots.length}
-            open={clipboardOpen}
-            onToggle={() => {
-              setClipboardOpen((v) => !v);
-              setTemplatesOpen(false);
-            }}
-          />
           <button
             type="button"
-            onClick={() => {
-              setTemplatesOpen((v) => !v);
-              setClipboardOpen(false);
-            }}
+            onClick={() => handleLightModeChange(!lightModeEnabled)}
             className={[
               "flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition",
-              templatesOpen
+              lightModeEnabled
                 ? "bg-sky-50 text-sky-900"
                 : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
             ].join(" ")}
-            title="Vorlagen"
-            aria-label={`Vorlagen${templateCount ? `, ${templateCount}` : ""}${templatesOpen ? ", geöffnet" : ""}`}
-            aria-pressed={templatesOpen}
+            title="Light-Modus: nur Baumstruktur (Strg/Cmd+Shift+L)"
+            aria-label="Light-Modus"
+            aria-pressed={lightModeEnabled}
           >
-            <FileStack className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            <span className="hidden sm:inline">Vorlagen</span>
-            {templateCount > 0 ? (
-              <span className="min-w-[1.15rem] rounded-full bg-sky-600 px-1 py-0.5 text-center text-[10px] font-semibold leading-none text-white">
-                {templateCount}
-              </span>
-            ) : null}
+            <ListTree className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="hidden sm:inline">Light</span>
           </button>
+
+          {!lightModeEnabled ? (
+            <>
+              <ClipboardDropTarget
+                count={clipboardRoots.length}
+                open={clipboardOpen}
+                onToggle={() => {
+                  setClipboardOpen((v) => !v);
+                  setTemplatesOpen(false);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setTemplatesOpen((v) => !v);
+                  setClipboardOpen(false);
+                }}
+                className={[
+                  "flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition",
+                  templatesOpen
+                    ? "bg-sky-50 text-sky-900"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                ].join(" ")}
+                title="Vorlagen"
+                aria-label={`Vorlagen${templateCount ? `, ${templateCount}` : ""}${templatesOpen ? ", geöffnet" : ""}`}
+                aria-pressed={templatesOpen}
+              >
+                <FileStack className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                <span className="hidden sm:inline">Vorlagen</span>
+                {templateCount > 0 ? (
+                  <span className="min-w-[1.15rem] rounded-full bg-sky-600 px-1 py-0.5 text-center text-[10px] font-semibold leading-none text-white">
+                    {templateCount}
+                  </span>
+                ) : null}
+              </button>
+            </>
+          ) : null}
 
           <span className="mx-0.5 hidden h-4 w-px bg-slate-200 sm:block" aria-hidden />
 
@@ -1778,6 +1899,8 @@ export function TaskBoard() {
             splitAvailable={!isMobileLayout}
             splitViewEnabled={splitViewEnabled}
             onSplitViewChange={setSplitViewEnabled}
+            lightModeEnabled={lightModeEnabled}
+            onLightModeChange={handleLightModeChange}
             onApplyBoardDepth={(level) => applyBoardDepthInView(level)}
             onExpandBoardDepth={() => applyBoardDepthInView(null)}
             onApplyCardDepth={(level) => applyCardDepthInView(level)}
@@ -1806,7 +1929,9 @@ export function TaskBoard() {
         onChange={handleImportFileChange}
       />
 
-      <TagFilterBar onOpenResults={() => setFilterResultsOpen(true)} />
+      {!lightModeEnabled ? (
+        <TagFilterBar onOpenResults={() => setFilterResultsOpen(true)} />
+      ) : null}
     </header>
   );
 
@@ -1832,78 +1957,99 @@ export function TaskBoard() {
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {appHeader}
             <div className="flex min-h-0 flex-1 flex-row overflow-hidden">
-              <OutlineRail
-                roots={roots}
-                collapsedIds={collapsedSet}
-                contextNodeId={contextNodeId}
-                hideCompletedTasks={hideCompletedTasks}
-                completedTag={completedTag}
-                nestDropTargetId={nestDropTargetId}
-                onSelectNode={handleOutlineSelect}
-                onToggleCollapsed={toggleNodeCollapsed}
-              />
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                {boardViewMode === "canvas" ? (
-                  <>
-                    <div className="shrink-0 border-b border-[var(--border)] bg-[var(--panel-solid)] px-3 py-2">
-                      <BreadcrumbTrail
-                        path={breadcrumbPathByPane[activePane]}
-                        onNavigateRoot={() => {
-                          setContextNodeId(null, activePane);
-                        }}
-                        onNavigateTo={(id) => {
-                          setContextNodeId(id, activePane);
-                        }}
-                        onDrillUp={() => {
-                          const leaving = contextByPane[activePane];
-                          drillUp(activePane);
-                          if (leaving) setKeyboardFocusNodeId(leaving, activePane);
-                        }}
-                      />
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-hidden">
-                      <TaskCanvas onOpenNoteEditor={openEditor} />
-                    </div>
-                  </>
-                ) : boardViewMode === "presentation" ? (
-                  <TaskPresentation />
-                ) : showSplitView ? (
-                  <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
-                    {renderPane("left")}
-                    <div
-                      className="w-px shrink-0 bg-slate-200"
-                      aria-hidden
-                    />
-                    {renderPane("right")}
+              {lightModeEnabled ? (
+                <OutlineRail
+                  variant="light"
+                  roots={roots}
+                  collapsedIds={collapsedSet}
+                  contextNodeId={contextNodeId}
+                  hideCompletedTasks={hideCompletedTasks}
+                  completedTag={completedTag}
+                  nestDropTargetId={nestDropTargetId}
+                  keyboardFocusNodeId={keyboardFocusNodeId}
+                  titleEditNodeId={titleEditNodeId}
+                  onSelectNode={handleOutlineSelect}
+                  onToggleCollapsed={toggleNodeCollapsed}
+                  onTitleSave={handleTitleSave}
+                  onTitleEditCancel={handleTitleEditCancel}
+                  onOpenDetails={handleOpenDetails}
+                />
+              ) : (
+                <>
+                  <OutlineRail
+                    roots={roots}
+                    collapsedIds={collapsedSet}
+                    contextNodeId={contextNodeId}
+                    hideCompletedTasks={hideCompletedTasks}
+                    completedTag={completedTag}
+                    nestDropTargetId={nestDropTargetId}
+                    onSelectNode={handleOutlineSelect}
+                    onToggleCollapsed={toggleNodeCollapsed}
+                  />
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                    {boardViewMode === "canvas" ? (
+                      <>
+                        <div className="shrink-0 border-b border-[var(--border)] bg-[var(--panel-solid)] px-3 py-2">
+                          <BreadcrumbTrail
+                            path={breadcrumbPathByPane[activePane]}
+                            onNavigateRoot={() => {
+                              setContextNodeId(null, activePane);
+                            }}
+                            onNavigateTo={(id) => {
+                              setContextNodeId(id, activePane);
+                            }}
+                            onDrillUp={() => {
+                              const leaving = contextByPane[activePane];
+                              drillUp(activePane);
+                              if (leaving) setKeyboardFocusNodeId(leaving, activePane);
+                            }}
+                          />
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-hidden">
+                          <TaskCanvas onOpenNoteEditor={openEditor} />
+                        </div>
+                      </>
+                    ) : boardViewMode === "presentation" ? (
+                      <TaskPresentation />
+                    ) : showSplitView ? (
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
+                        {renderPane("left")}
+                        <div
+                          className="w-px shrink-0 bg-slate-200"
+                          aria-hidden
+                        />
+                        {renderPane("right")}
+                      </div>
+                    ) : (
+                      renderPane(activePane)
+                    )}
                   </div>
-                ) : (
-                  renderPane(activePane)
-                )}
-              </div>
-              <ClipboardSidebar
-                open={clipboardOpen}
-                roots={clipboardRoots}
-                activeDragId={activeDragId}
-                activeOverGap={clipboardOverGap}
-                onRequestClear={() => setClearClipboardConfirmOpen(true)}
-                onClose={() => setClipboardOpen(false)}
-                onSaveAsTemplate={(node) => setTemplateSaveRoot(node)}
-              />
-              <TemplatesSidebar
-                open={templatesOpen}
-                onClose={() => setTemplatesOpen(false)}
-                onInsertRequest={(tpl) => {
-                  const parentId = keyboardFocusNodeId ?? contextListNodes[0]?.id ?? null;
-                  if (!parentId) {
-                    window.alert(
-                      "Bitte zuerst eine Zielkarte wählen (oder eine Karte anlegen), unter die die Vorlage eingefügt werden soll.",
-                    );
-                    return;
-                  }
-                  setTemplateInsertPrefillId(tpl.id);
-                  setTemplateInsertParentId(parentId);
-                }}
-              />
+                  <ClipboardSidebar
+                    open={clipboardOpen}
+                    roots={clipboardRoots}
+                    activeDragId={activeDragId}
+                    activeOverGap={clipboardOverGap}
+                    onRequestClear={() => setClearClipboardConfirmOpen(true)}
+                    onClose={() => setClipboardOpen(false)}
+                    onSaveAsTemplate={(node) => setTemplateSaveRoot(node)}
+                  />
+                  <TemplatesSidebar
+                    open={templatesOpen}
+                    onClose={() => setTemplatesOpen(false)}
+                    onInsertRequest={(tpl) => {
+                      const parentId = keyboardFocusNodeId ?? contextListNodes[0]?.id ?? null;
+                      if (!parentId) {
+                        window.alert(
+                          "Bitte zuerst eine Zielkarte wählen (oder eine Karte anlegen), unter die die Vorlage eingefügt werden soll.",
+                        );
+                        return;
+                      }
+                      setTemplateInsertPrefillId(tpl.id);
+                      setTemplateInsertParentId(parentId);
+                    }}
+                  />
+                </>
+              )}
             </div>
             <DragOverlay zIndex={40}>
               {activeDragId ? <DragPreviewCard id={activeDragId} /> : null}
@@ -1913,15 +2059,38 @@ export function TaskBoard() {
       </div>
 
       <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--panel-solid)] px-4 py-1.5 text-[0.72rem] text-[var(--muted)]">
-        <span className="min-w-0 truncate">
-          {!workingFileUiReady
-            ? "\u00A0"
-            : workingFileName
-              ? `Arbeitsdatei: ${workingFileName}${workingFileDirty ? " · ungespeichert" : workingFileSaving ? " · speichert …" : " · gespeichert"}`
-              : workingFileAttached
-                ? "Arbeitsdatei verknüpft"
-                : "Keine Arbeitsdatei"}
-        </span>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => void handleSaveFromFooter()}
+            disabled={workingFileSaving || !workingFileUiReady}
+            className={[
+              "flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition",
+              workingFileSaving || !workingFileUiReady
+                ? "cursor-wait text-[var(--muted)]"
+                : footerSaveUnsaved
+                  ? "text-red-600 hover:bg-red-50 hover:text-red-700"
+                  : "text-[var(--muted)] hover:bg-[var(--control)] hover:text-[var(--text)]",
+            ].join(" ")}
+            title={footerSaveTitle}
+            aria-label={footerSaveTitle}
+          >
+            {workingFileSaving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Save className="h-3.5 w-3.5" aria-hidden />
+            )}
+          </button>
+          <span className="min-w-0 truncate">
+            {!workingFileUiReady
+              ? "\u00A0"
+              : workingFileName
+                ? `Arbeitsdatei: ${workingFileName}`
+                : workingFileAttached
+                  ? "Arbeitsdatei verknüpft"
+                  : "Keine Arbeitsdatei"}
+          </span>
+        </div>
         <span className="hidden shrink-0 sm:inline">ET2 · © A. Bergmann</span>
         <span className="shrink-0 sm:hidden">© A. Bergmann</span>
       </footer>
