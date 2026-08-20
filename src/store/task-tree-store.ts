@@ -21,6 +21,7 @@ import {
   normalizePathIds,
   pathFromRootToNode,
   pathIdsAfterNodeMove,
+  translateNodesBy,
   updateNodeFields,
 } from "@/lib/tree-utils";
 import { DEFAULT_CARD_FIELD_VISIBILITY, mergeCardFieldVisibility, type CardFieldVisibility } from "@/lib/card-field-visibility";
@@ -327,6 +328,13 @@ export interface TaskTreeState {
   /** Canvas-Viewport (nicht persistiert). */
   canvasViewport: CanvasViewport;
   setCanvasViewport: (viewport: CanvasViewport) => void;
+  /**
+   * True während Ziehen/Resize/Rotate auf dem Canvas.
+   * Nicht in der Undo-Historie; Autosave überspringt teure Persist-Keys.
+   */
+  canvasGeometryGesture: boolean;
+  beginCanvasGeometryGesture: () => void;
+  endCanvasGeometryGesture: () => void;
   /** Gruppierungs-Boxen im Canvas, pro Kontext-Ebene (key = contextNodeId ?? "__root__"). */
   canvasGroups: Record<string, CanvasGroup[]>;
   addCanvasGroup: (group: CanvasGroup) => void;
@@ -531,6 +539,22 @@ function cleanupAfterSubtreeRemoved(
   };
 }
 
+/** Nach dem ersten Geometrie-`set` in einer Geste: weitere Moves nicht einzeln aufzeichnen. */
+let canvasGeometryHistoryPaused = false;
+
+function pauseBoardHistoryAfterFirstGeometryChange(): void {
+  if (canvasGeometryHistoryPaused) return;
+  if (!useTaskTreeStore.getState().canvasGeometryGesture) return;
+  canvasGeometryHistoryPaused = true;
+  useTaskTreeStore.temporal.getState().pause();
+}
+
+function resumeBoardHistoryAfterGeometryGesture(): void {
+  if (!canvasGeometryHistoryPaused) return;
+  canvasGeometryHistoryPaused = false;
+  useTaskTreeStore.temporal.getState().resume();
+}
+
 function moveBoardNodeToClipboard(
   state: TaskTreeState,
   nodeId: string,
@@ -559,6 +583,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
   appearance: { ...DEFAULT_APPEARANCE },
   boardViewMode: "list",
   canvasViewport: { ...DEFAULT_CANVAS_VIEWPORT },
+  canvasGeometryGesture: false,
   canvasGroups: {} as Record<string, CanvasGroup[]>,
   relationConnectMode: false,
   relationDraftSourceId: null,
@@ -1097,6 +1122,17 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     set({ canvasViewport: viewport });
   },
 
+  beginCanvasGeometryGesture: () => {
+    if (get().canvasGeometryGesture) return;
+    set({ canvasGeometryGesture: true });
+  },
+
+  endCanvasGeometryGesture: () => {
+    resumeBoardHistoryAfterGeometryGesture();
+    if (!get().canvasGeometryGesture) return;
+    set({ canvasGeometryGesture: false });
+  },
+
   addCanvasGroup: (group) => {
     const key = get().contextNodeId ?? "__root__";
     const prev = get().canvasGroups;
@@ -1109,6 +1145,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     const prev = get().canvasGroups;
     const list = prev[key] ?? [];
     set({ canvasGroups: { ...prev, [key]: list.map((g) => g.id === id ? { ...g, ...patch } : g) } });
+    pauseBoardHistoryAfterFirstGeometryChange();
   },
 
   removeCanvasGroup: (id) => {
@@ -1120,32 +1157,22 @@ export const useTaskTreeStore = create<TaskTreeState>()(
 
   moveCanvasGroupBy: (id, dx, dy, memberIds) => {
     if (dx === 0 && dy === 0) return;
-    set((s) => {
-      const key = s.contextNodeId ?? "__root__";
-      const prev = s.canvasGroups;
-      const list = prev[key] ?? [];
-      if (!list.some((g) => g.id === id)) return {};
-      const nextGroups = {
-        ...prev,
-        [key]: list.map((g) => (g.id === id ? { ...g, x: g.x + dx, y: g.y + dy } : g)),
-      };
-      if (memberIds.length === 0) {
-        return { canvasGroups: nextGroups };
-      }
-      const idSet = new Set(memberIds);
-      const nextRoots = structuredClone(s.roots);
-      const moveNode = (forest: TaskNode[]) => {
-        for (const n of forest) {
-          if (idSet.has(n.id)) {
-            n.x = (n.x ?? 0) + dx;
-            n.y = (n.y ?? 0) + dy;
-          }
-          if (n.children.length > 0) moveNode(n.children);
-        }
-      };
-      moveNode(nextRoots);
-      return { roots: nextRoots, canvasGroups: nextGroups };
+    const s = get();
+    const key = s.contextNodeId ?? "__root__";
+    const prev = s.canvasGroups;
+    const list = prev[key] ?? [];
+    if (!list.some((g) => g.id === id)) return;
+    const nextGroups = {
+      ...prev,
+      [key]: list.map((g) => (g.id === id ? { ...g, x: g.x + dx, y: g.y + dy } : g)),
+    };
+    const nextRoots =
+      memberIds.length === 0 ? s.roots : translateNodesBy(s.roots, new Set(memberIds), dx, dy);
+    set({
+      canvasGroups: nextGroups,
+      ...(nextRoots !== s.roots ? { roots: nextRoots } : {}),
     });
+    pauseBoardHistoryAfterFirstGeometryChange();
   },
 
   alignCanvasSelection: (mode, referenceId) => {
@@ -1227,21 +1254,13 @@ export const useTaskTreeStore = create<TaskTreeState>()(
   },
 
   moveCanvasNodesBy: (dx, dy) => {
+    if (dx === 0 && dy === 0) return;
     const { roots, selectedCanvasNodeIds } = get();
     if (selectedCanvasNodeIds.length === 0) return;
-    const idSet = new Set(selectedCanvasNodeIds);
-    const nextRoots = structuredClone(roots);
-    const moveNode = (forest: TaskNode[]) => {
-      for (const n of forest) {
-        if (idSet.has(n.id)) {
-          n.x = (n.x ?? 0) + dx;
-          n.y = (n.y ?? 0) + dy;
-        }
-        if (n.children.length > 0) moveNode(n.children);
-      }
-    };
-    moveNode(nextRoots);
+    const nextRoots = translateNodesBy(roots, new Set(selectedCanvasNodeIds), dx, dy);
+    if (nextRoots === roots) return;
     set({ roots: nextRoots });
+    pauseBoardHistoryAfterFirstGeometryChange();
   },
 
   setDefaultRelationType: (type) => {
@@ -1264,37 +1283,40 @@ export const useTaskTreeStore = create<TaskTreeState>()(
   },
 
   moveCanvasNode: (nodeId, x, y) => {
-    set((s) => {
-      const nextRoots = updateNodeFields(s.roots, nodeId, {
-        x: snapToGrid(x),
-        y: snapToGrid(y),
-      });
-      return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
-    });
+    const nx = snapToGrid(x);
+    const ny = snapToGrid(y);
+    const node = findNodeById(get().roots, nodeId);
+    if (!node || (node.x === nx && node.y === ny)) return;
+    const nextRoots = updateNodeFields(get().roots, nodeId, { x: nx, y: ny });
+    if (nextRoots === get().roots) return;
+    set({ roots: nextRoots });
+    pauseBoardHistoryAfterFirstGeometryChange();
   },
 
   resizeCanvasNode: (nodeId, patch) => {
-    set((s) => {
-      const node = findNodeById(s.roots, nodeId);
-      const minW = node?.kind === "symbol" ? 40 : 100;
-      const minH = node?.kind === "symbol" ? 40 : 60;
-      const nextRoots = updateNodeFields(s.roots, nodeId, {
-        x: Math.round(patch.x),
-        y: Math.round(patch.y),
-        width: Math.max(minW, Math.round(patch.width)),
-        height: Math.max(minH, Math.round(patch.height)),
-      });
-      return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
-    });
+    const node = findNodeById(get().roots, nodeId);
+    if (!node) return;
+    const minW = node.kind === "symbol" ? 40 : 100;
+    const minH = node.kind === "symbol" ? 40 : 60;
+    const x = Math.round(patch.x);
+    const y = Math.round(patch.y);
+    const width = Math.max(minW, Math.round(patch.width));
+    const height = Math.max(minH, Math.round(patch.height));
+    if (node.x === x && node.y === y && node.width === width && node.height === height) return;
+    const nextRoots = updateNodeFields(get().roots, nodeId, { x, y, width, height });
+    if (nextRoots === get().roots) return;
+    set({ roots: nextRoots });
+    pauseBoardHistoryAfterFirstGeometryChange();
   },
 
   rotateCanvasNode: (nodeId, rotation) => {
-    set((s) => {
-      const nextRoots = updateNodeFields(s.roots, nodeId, {
-        rotation: Math.round(rotation * 10) / 10,
-      });
-      return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
-    });
+    const nextRotation = Math.round(rotation * 10) / 10;
+    const node = findNodeById(get().roots, nodeId);
+    if (!node || node.rotation === nextRotation) return;
+    const nextRoots = updateNodeFields(get().roots, nodeId, { rotation: nextRotation });
+    if (nextRoots === get().roots) return;
+    set({ roots: nextRoots });
+    pauseBoardHistoryAfterFirstGeometryChange();
   },
 
   setCanvasNodeZIndex: (nodeId, zIndex) => {
@@ -1687,6 +1709,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
 
 /** Historie leeren (nach Datei laden / Board-Import). */
 export function clearBoardHistory(): void {
+  resumeBoardHistoryAfterGeometryGesture();
   useTaskTreeStore.temporal.getState().clear();
 }
 
@@ -1694,6 +1717,7 @@ export function clearBoardHistory(): void {
 export function runWithoutBoardHistory(fn: () => void): void {
   const temporalStore = useTaskTreeStore.temporal.getState();
   temporalStore.pause();
+  canvasGeometryHistoryPaused = false;
   try {
     fn();
   } finally {

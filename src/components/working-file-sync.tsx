@@ -285,6 +285,7 @@ export function WorkingFileSync({
 
     const onPersistedBoardChanged = () => {
       if (suspendAutoPersistRef.current) return;
+      if (useTaskTreeStore.getState().canvasGeometryGesture) return;
       if (isWorkingFilePersistPaused()) {
         syncDirty();
         return;

@@ -19,7 +19,7 @@ export function findNodeById(nodes: TaskNode[], id: string): TaskNode | null {
   return null;
 }
 
-/** Felder einer Karte ändern (flach, ohne Kinder). */
+/** Felder einer Karte ändern (flach, ohne Kinder). Unveränderte Teilbäume behalten ihre Referenz. */
 export function updateNodeFields(
   roots: TaskNode[],
   nodeId: string,
@@ -50,24 +50,63 @@ export function updateNodeFields(
 ): TaskNode[] {
   let found = false;
   function mapNodes(nodes: TaskNode[]): TaskNode[] {
-    return nodes.map((n) => {
+    let any = false;
+    const next = nodes.map((n) => {
       if (n.id === nodeId) {
         found = true;
-        const next = { ...n, ...fields };
+        const updated: TaskNode = { ...n, ...fields };
         if ("cardIcon" in fields && fields.cardIcon === undefined) {
-          delete next.cardIcon;
+          delete updated.cardIcon;
         }
         if ("cardColor" in fields && fields.cardColor === undefined) {
-          delete next.cardColor;
+          delete updated.cardColor;
         }
-        return next;
+        any = true;
+        return updated;
       }
       if (n.children.length === 0) return n;
-      return { ...n, children: mapNodes(n.children) };
+      const children = mapNodes(n.children);
+      if (children === n.children) return n;
+      any = true;
+      return { ...n, children };
     });
+    return any ? next : nodes;
   }
   const next = mapNodes(roots);
   return found ? next : roots;
+}
+
+/** Verschiebt die genannten Knoten um `dx`/`dy`. Unveränderte Teilbäume behalten ihre Referenz. */
+export function translateNodesBy(
+  roots: TaskNode[],
+  ids: ReadonlySet<string>,
+  dx: number,
+  dy: number,
+): TaskNode[] {
+  if (dx === 0 && dy === 0 || ids.size === 0) return roots;
+  let changed = false;
+  function walk(nodes: TaskNode[]): TaskNode[] {
+    let any = false;
+    const next = nodes.map((n) => {
+      let node = n;
+      if (ids.has(n.id)) {
+        node = { ...n, x: (n.x ?? 0) + dx, y: (n.y ?? 0) + dy };
+        changed = true;
+        any = true;
+      }
+      if (n.children.length > 0) {
+        const children = walk(n.children);
+        if (children !== n.children) {
+          node = node === n ? { ...n, children } : { ...node, children };
+          any = true;
+        }
+      }
+      return node;
+    });
+    return any ? next : nodes;
+  }
+  const next = walk(roots);
+  return changed ? next : roots;
 }
 
 /** Direkter Eltern-Knoten: `null` = Wurzel; `undefined` = nicht im Baum. */

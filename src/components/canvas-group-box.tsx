@@ -99,10 +99,10 @@ export function CanvasGroupBox({
         }
       }}
       onPointerUp={(e) => {
-        const wasDragging = drag.current !== null;
+        const wasGesturing = drag.current !== null || resize.current !== null;
         drag.current = null;
         resize.current = null;
-        if (wasDragging) onMoveEnd?.();
+        if (wasGesturing) onMoveEnd?.();
         try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       }}
       onClick={(e) => {

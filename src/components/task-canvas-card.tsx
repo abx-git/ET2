@@ -70,6 +70,8 @@ export interface TaskCanvasCardProps {
   onMove: (x: number, y: number, delta?: { dx: number; dy: number }) => void;
   onResize: (patch: { x: number; y: number; width: number; height: number }) => void;
   onRotate: (rotation: number) => void;
+  /** Pointer-up after move/resize/rotate — flush coalesced geometry. */
+  onGeometryEnd?: () => void;
   onConnectHandle: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   /** While dragging: card under pointer that would receive a nest drop (or null). */
@@ -97,6 +99,7 @@ export function TaskCanvasCard({
   onMove,
   onResize,
   onRotate,
+  onGeometryEnd,
   onConnectHandle,
   onContextMenu,
   onNestHoverChange,
@@ -116,6 +119,8 @@ export function TaskCanvasCard({
     lastDy: number;
     moved: boolean;
   } | null>(null);
+  const nestHoverRaf = useRef(0);
+  const pendingNestPoint = useRef<{ x: number; y: number } | null>(null);
   const editingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
@@ -255,6 +260,7 @@ export function TaskCanvasCard({
     const onUp = () => {
       window.removeEventListener("pointermove", onMoveEv);
       window.removeEventListener("pointerup", onUp);
+      onGeometryEnd?.();
     };
     window.addEventListener("pointermove", onMoveEv);
     window.addEventListener("pointerup", onUp);
@@ -285,6 +291,7 @@ export function TaskCanvasCard({
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      onGeometryEnd?.();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -294,7 +301,7 @@ export function TaskCanvasCard({
     <div
       data-canvas-card-id={node.id}
       className={[
-        "group/card absolute flex flex-col rounded-xl border transition-all duration-150",
+        "group/card absolute flex flex-col rounded-xl border transition-[box-shadow,opacity,filter] duration-150",
         editing ? "" : "select-none cursor-grab active:cursor-grabbing",
         colorClass,
         selected
@@ -366,14 +373,29 @@ export function TaskCanvasCard({
           onMove(drag.current.sx + dx, drag.current.sy + dy);
         }
         if (drag.current.moved) {
-          onNestHoverChange?.(canvasCardIdFromPoint(e.clientX, e.clientY, node.id));
+          pendingNestPoint.current = { x: e.clientX, y: e.clientY };
+          if (!nestHoverRaf.current) {
+            nestHoverRaf.current = requestAnimationFrame(() => {
+              nestHoverRaf.current = 0;
+              const pt = pendingNestPoint.current;
+              pendingNestPoint.current = null;
+              if (!pt) return;
+              onNestHoverChange?.(canvasCardIdFromPoint(pt.x, pt.y, node.id));
+            });
+          }
         }
       }}
       onPointerUp={(e) => {
         const state = drag.current;
         drag.current = null;
+        if (nestHoverRaf.current) {
+          cancelAnimationFrame(nestHoverRaf.current);
+          nestHoverRaf.current = 0;
+        }
+        pendingNestPoint.current = null;
         try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* */ }
         onNestHoverChange?.(null);
+        onGeometryEnd?.();
         if (!state?.moved || editing) return;
         if (onOutlineDrop?.(e.clientX, e.clientY)) return;
         const targetId = canvasCardIdFromPoint(e.clientX, e.clientY, node.id);
@@ -381,7 +403,13 @@ export function TaskCanvasCard({
       }}
       onPointerCancel={() => {
         drag.current = null;
+        if (nestHoverRaf.current) {
+          cancelAnimationFrame(nestHoverRaf.current);
+          nestHoverRaf.current = 0;
+        }
+        pendingNestPoint.current = null;
         onNestHoverChange?.(null);
+        onGeometryEnd?.();
       }}
       onDoubleClick={(e) => {
         e.stopPropagation();

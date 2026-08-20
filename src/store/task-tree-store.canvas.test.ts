@@ -73,4 +73,39 @@ describe("canvas align / duplicate / group move", () => {
     expect(s.roots.find((n) => n.id === "a")?.y).toBe(25);
     expect(s.roots.find((n) => n.id === "b")?.x).toBe(80);
   });
+
+  it("does not rewrite roots when the snapped position is unchanged", () => {
+    useTaskTreeStore.getState().moveCanvasNode("a", 20, 20);
+    const afterSnap = useTaskTreeStore.getState().roots;
+    expect(afterSnap[0]?.x).toBe(20);
+    expect(afterSnap[0]?.y).toBe(20);
+    const roots = useTaskTreeStore.getState().roots;
+    useTaskTreeStore.getState().moveCanvasNode("a", 24, 26);
+    expect(useTaskTreeStore.getState().roots).toBe(roots);
+  });
+
+  it("keeps sibling identity when moving one card", () => {
+    useTaskTreeStore.getState().moveCanvasNode("a", 40, 40);
+    const sibling = useTaskTreeStore.getState().roots[1];
+    useTaskTreeStore.getState().moveCanvasNode("a", 80, 60);
+    expect(useTaskTreeStore.getState().roots[1]).toBe(sibling);
+  });
+
+  it("coalesces a canvas drag gesture into one undo step", () => {
+    useTaskTreeStore.getState().moveCanvasNode("a", 20, 20);
+    useTaskTreeStore.temporal.getState().clear();
+    const startX = useTaskTreeStore.getState().roots[0]?.x;
+    useTaskTreeStore.getState().beginCanvasGeometryGesture();
+    useTaskTreeStore.getState().moveCanvasNode("a", 40, 60);
+    useTaskTreeStore.getState().moveCanvasNode("a", 80, 100);
+    useTaskTreeStore.getState().moveCanvasNode("a", 120, 140);
+    expect(useTaskTreeStore.temporal.getState().pastStates).toHaveLength(1);
+    useTaskTreeStore.getState().endCanvasGeometryGesture();
+    expect(useTaskTreeStore.getState().canvasGeometryGesture).toBe(false);
+    expect(useTaskTreeStore.getState().roots[0]?.x).toBe(120);
+    expect(useTaskTreeStore.temporal.getState().pastStates).toHaveLength(1);
+
+    useTaskTreeStore.temporal.getState().undo();
+    expect(useTaskTreeStore.getState().roots[0]?.x).toBe(startX);
+  });
 });

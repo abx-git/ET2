@@ -58,6 +58,35 @@ const WORLD_H = 3000;
 
 const EMPTY_GROUPS: import("@/lib/canvas-group").CanvasGroup[] = [];
 
+type CanvasGeomOp =
+  | { kind: "abs"; nodeId: string; x: number; y: number }
+  | { kind: "delta"; dx: number; dy: number }
+  | { kind: "group"; id: string; members: string[]; dx: number; dy: number }
+  | { kind: "groupResize"; id: string; width: number; height: number }
+  | { kind: "resize"; nodeId: string; patch: { x: number; y: number; width: number; height: number } }
+  | { kind: "rotate"; nodeId: string; rotation: number };
+
+function canMergeCanvasGeom(a: CanvasGeomOp, b: CanvasGeomOp): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "abs" && b.kind === "abs") return a.nodeId === b.nodeId;
+  if (a.kind === "delta" && b.kind === "delta") return true;
+  if (a.kind === "group" && b.kind === "group") return a.id === b.id;
+  if (a.kind === "groupResize" && b.kind === "groupResize") return a.id === b.id;
+  if (a.kind === "resize" && b.kind === "resize") return a.nodeId === b.nodeId;
+  if (a.kind === "rotate" && b.kind === "rotate") return a.nodeId === b.nodeId;
+  return false;
+}
+
+function mergeCanvasGeom(prev: CanvasGeomOp, next: CanvasGeomOp): CanvasGeomOp {
+  if (prev.kind === "delta" && next.kind === "delta") {
+    return { kind: "delta", dx: prev.dx + next.dx, dy: prev.dy + next.dy };
+  }
+  if (prev.kind === "group" && next.kind === "group") {
+    return { kind: "group", id: next.id, members: next.members, dx: prev.dx + next.dx, dy: prev.dy + next.dy };
+  }
+  return next;
+}
+
 interface LassoRect {
   x1: number;
   y1: number;
@@ -82,6 +111,8 @@ export function TaskCanvas({
   const moveCanvasNodesBy = useTaskTreeStore((s) => s.moveCanvasNodesBy);
   const resizeCanvasNode = useTaskTreeStore((s) => s.resizeCanvasNode);
   const rotateCanvasNode = useTaskTreeStore((s) => s.rotateCanvasNode);
+  const beginCanvasGeometryGesture = useTaskTreeStore((s) => s.beginCanvasGeometryGesture);
+  const endCanvasGeometryGesture = useTaskTreeStore((s) => s.endCanvasGeometryGesture);
   const reorderCanvasNodeZIndex = useTaskTreeStore((s) => s.reorderCanvasNodeZIndex);
   const drillIntoNode = useTaskTreeStore((s) => s.drillIntoNode);
   const addCardAfter = useTaskTreeStore((s) => s.addCardAfter);
@@ -512,17 +543,104 @@ export function TaskCanvas({
     ],
   );
 
+  const geomPendingRef = useRef<CanvasGeomOp | null>(null);
+  const geomRafRef = useRef(0);
+  const nestHoverRafRef = useRef(0);
+  const pendingNestHoverRef = useRef<string | null | undefined>(undefined);
+
+  const applyCanvasGeom = useCallback(
+    (op: CanvasGeomOp) => {
+      switch (op.kind) {
+        case "abs":
+          moveCanvasNode(op.nodeId, op.x, op.y);
+          break;
+        case "delta":
+          moveCanvasNodesBy(op.dx, op.dy);
+          break;
+        case "group":
+          moveCanvasGroupBy(op.id, op.dx, op.dy, op.members);
+          break;
+        case "groupResize":
+          updateCanvasGroup(op.id, { width: op.width, height: op.height });
+          break;
+        case "resize":
+          resizeCanvasNode(op.nodeId, op.patch);
+          break;
+        case "rotate":
+          rotateCanvasNode(op.nodeId, op.rotation);
+          break;
+      }
+    },
+    [moveCanvasGroupBy, moveCanvasNode, moveCanvasNodesBy, resizeCanvasNode, rotateCanvasNode, updateCanvasGroup],
+  );
+
+  const flushCanvasGeom = useCallback(() => {
+    const op = geomPendingRef.current;
+    geomPendingRef.current = null;
+    if (op) applyCanvasGeom(op);
+  }, [applyCanvasGeom]);
+
+  const queueCanvasGeom = useCallback(
+    (op: CanvasGeomOp) => {
+      beginCanvasGeometryGesture();
+      const prev = geomPendingRef.current;
+      if (prev && !canMergeCanvasGeom(prev, op)) {
+        applyCanvasGeom(prev);
+        geomPendingRef.current = op;
+      } else {
+        geomPendingRef.current = prev ? mergeCanvasGeom(prev, op) : op;
+      }
+      if (geomRafRef.current) return;
+      geomRafRef.current = requestAnimationFrame(() => {
+        geomRafRef.current = 0;
+        flushCanvasGeom();
+      });
+    },
+    [applyCanvasGeom, beginCanvasGeometryGesture, flushCanvasGeom],
+  );
+
+  const endCanvasGeomGesture = useCallback(() => {
+    if (geomRafRef.current) {
+      cancelAnimationFrame(geomRafRef.current);
+      geomRafRef.current = 0;
+    }
+    if (nestHoverRafRef.current) {
+      cancelAnimationFrame(nestHoverRafRef.current);
+      nestHoverRafRef.current = 0;
+    }
+    pendingNestHoverRef.current = undefined;
+    flushCanvasGeom();
+    setNestHoverId(null);
+    endCanvasGeometryGesture();
+  }, [endCanvasGeometryGesture, flushCanvasGeom]);
+
+  const endCanvasGeomGestureRef = useRef(endCanvasGeomGesture);
+  endCanvasGeomGestureRef.current = endCanvasGeomGesture;
+  useEffect(() => () => endCanvasGeomGestureRef.current(), []);
+
   const handleCardMove = useCallback(
     (nodeId: string, x: number, y: number, isMultiDragDelta?: { dx: number; dy: number }) => {
       const multiIds = useTaskTreeStore.getState().selectedCanvasNodeIds;
       if (multiIds.length > 1 && multiIds.includes(nodeId) && isMultiDragDelta) {
-        moveCanvasNodesBy(isMultiDragDelta.dx, isMultiDragDelta.dy);
+        queueCanvasGeom({ kind: "delta", dx: isMultiDragDelta.dx, dy: isMultiDragDelta.dy });
       } else {
-        moveCanvasNode(nodeId, x, y);
+        queueCanvasGeom({ kind: "abs", nodeId, x, y });
       }
     },
-    [moveCanvasNode, moveCanvasNodesBy],
+    [queueCanvasGeom],
   );
+
+  const handleNestHoverChange = useCallback((targetId: string | null) => {
+    pendingNestHoverRef.current = targetId;
+    if (nestHoverRafRef.current) return;
+    nestHoverRafRef.current = requestAnimationFrame(() => {
+      nestHoverRafRef.current = 0;
+      const next = pendingNestHoverRef.current;
+      pendingNestHoverRef.current = undefined;
+      if (next === undefined) return;
+      setNestHoverId(next);
+    });
+  }, []);
 
   // Lasso rect in screen coords to world
   const lassoToWorld = useCallback(
@@ -952,12 +1070,13 @@ export function TaskCanvas({
               }}
               onMove={(_x, _y, delta) => {
                 const members = groupDragMembers.current[group.id] ?? [];
-                moveCanvasGroupBy(group.id, delta.dx, delta.dy, members);
+                queueCanvasGeom({ kind: "group", id: group.id, members, dx: delta.dx, dy: delta.dy });
               }}
               onMoveEnd={() => {
                 delete groupDragMembers.current[group.id];
+                endCanvasGeomGesture();
               }}
-              onResize={(w, h) => updateCanvasGroup(group.id, { width: w, height: h })}
+              onResize={(w, h) => queueCanvasGeom({ kind: "groupResize", id: group.id, width: w, height: h })}
               onLabelChange={(label) => updateCanvasGroup(group.id, { label })}
               onRemove={() => { removeCanvasGroup(group.id); setSelectedGroupId(null); }}
             />
@@ -975,8 +1094,9 @@ export function TaskCanvas({
                 onTitleEditConsumed={() => setPendingTitleEditId(null)}
                 onSelect={(shiftKey) => handleCardSelect(node.id, shiftKey ?? false)}
                 onMove={(x, y, delta) => handleCardMove(node.id, x, y, delta)}
-                onResize={(patch) => resizeCanvasNode(node.id, patch)}
-                onRotate={(r) => rotateCanvasNode(node.id, r)}
+                onResize={(patch) => queueCanvasGeom({ kind: "resize", nodeId: node.id, patch })}
+                onRotate={(r) => queueCanvasGeom({ kind: "rotate", nodeId: node.id, rotation: r })}
+                onGeometryEnd={endCanvasGeomGesture}
                 onConnectHandle={() => handleCardConnect(node.id)}
                 onContextMenu={(e) => {
                   const el = shellRef.current;
@@ -1002,10 +1122,11 @@ export function TaskCanvas({
                 onDrill={() => drillIntoNode(node.id)}
                 onOpenNote={() => onOpenNoteEditor?.(node.id)}
                 onMove={(x, y, delta) => handleCardMove(node.id, x, y, delta)}
-                onResize={(patch) => resizeCanvasNode(node.id, patch)}
-                onRotate={(r) => rotateCanvasNode(node.id, r)}
+                onResize={(patch) => queueCanvasGeom({ kind: "resize", nodeId: node.id, patch })}
+                onRotate={(r) => queueCanvasGeom({ kind: "rotate", nodeId: node.id, rotation: r })}
+                onGeometryEnd={endCanvasGeomGesture}
                 onConnectHandle={() => handleCardConnect(node.id)}
-                onNestHoverChange={setNestHoverId}
+                onNestHoverChange={handleNestHoverChange}
                 onNestOnto={(targetId) => handleNestOnto(node.id, targetId)}
                 onOutlineDrop={(clientX, clientY) => handleDropOnOutline(node.id, clientX, clientY)}
                 onContextMenu={(e) => {

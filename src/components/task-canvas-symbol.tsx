@@ -114,6 +114,8 @@ export interface TaskCanvasSymbolProps {
   onMove: (x: number, y: number, delta?: { dx: number; dy: number }) => void;
   onResize: (patch: { x: number; y: number; width: number; height: number }) => void;
   onRotate: (rotation: number) => void;
+  /** Pointer-up after move/resize/rotate — flush coalesced geometry. */
+  onGeometryEnd?: () => void;
   onConnectHandle: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   zoom: number;
@@ -131,6 +133,7 @@ export function TaskCanvasSymbol({
   onMove,
   onResize,
   onRotate,
+  onGeometryEnd,
   onConnectHandle,
   onContextMenu,
   zoom,
@@ -240,6 +243,7 @@ export function TaskCanvasSymbol({
     const onUp = () => {
       window.removeEventListener("pointermove", onMoveEv);
       window.removeEventListener("pointerup", onUp);
+      onGeometryEnd?.();
     };
     window.addEventListener("pointermove", onMoveEv);
     window.addEventListener("pointerup", onUp);
@@ -267,6 +271,7 @@ export function TaskCanvasSymbol({
     const onUp = () => {
       window.removeEventListener("pointermove", onMoveEv);
       window.removeEventListener("pointerup", onUp);
+      onGeometryEnd?.();
     };
     window.addEventListener("pointermove", onMoveEv);
     window.addEventListener("pointerup", onUp);
@@ -347,9 +352,11 @@ export function TaskCanvasSymbol({
         } catch {
           /* */
         }
+        onGeometryEnd?.();
       }}
       onPointerCancel={() => {
         drag.current = null;
+        onGeometryEnd?.();
       }}
       onContextMenu={(e) => {
         e.preventDefault();
