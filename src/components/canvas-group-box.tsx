@@ -9,7 +9,9 @@ export interface CanvasGroupBoxProps {
   selected: boolean;
   zoom: number;
   onSelect: () => void;
+  onMoveStart?: () => void;
   onMove: (x: number, y: number, delta: { dx: number; dy: number }) => void;
+  onMoveEnd?: () => void;
   onResize: (width: number, height: number) => void;
   onLabelChange: (label: string) => void;
   onRemove: () => void;
@@ -20,7 +22,9 @@ export function CanvasGroupBox({
   selected,
   zoom,
   onSelect,
+  onMoveStart,
   onMove,
+  onMoveEnd,
   onResize,
   onLabelChange,
   onRemove,
@@ -68,6 +72,7 @@ export function CanvasGroupBox({
         if (localY > 28 * zoom) return; // Don't drag from body
         e.stopPropagation();
         onSelect();
+        onMoveStart?.();
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         drag.current = { ox: e.clientX, oy: e.clientY, sx: group.x, sy: group.y, lastDx: 0, lastDy: 0 };
       }}
@@ -94,8 +99,10 @@ export function CanvasGroupBox({
         }
       }}
       onPointerUp={(e) => {
+        const wasDragging = drag.current !== null;
         drag.current = null;
         resize.current = null;
+        if (wasDragging) onMoveEnd?.();
         try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       }}
       onClick={(e) => {

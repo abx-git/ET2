@@ -22,7 +22,7 @@ Chrome/Edge empfohlen für File System Access (Arbeitsdatei `et2-board.json`). T
 | Ansicht | Zweck |
 |--------|--------|
 | Liste | Struktur, Suche, Filter, DnD — wie T2 |
-| Canvas | Layout, Abhängigkeits-Pfeile, grafisches Drill-down |
+| Canvas | Layout, Abhängigkeits-Pfeile, grafisches Drill-down, Ausrichten, Gruppen mit Inhalt, PNG/SVG/PDF |
 
 Beide teilen denselben Store und denselben Drill-Kontext (`contextNodeId`).
 

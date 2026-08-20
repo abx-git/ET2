@@ -102,7 +102,7 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
         { keys: "Ecken / Kanten", description: "Größe ändern · Drehgriff oben = rotieren" },
         { keys: "Klick auf Pfeil", description: "Pfeil auswählen · Ansatzpunkte an den Karten" },
         { keys: "Ansatzpunkt ziehen", description: "Pfeil-Ende umhängen (auf andere Geschwisterkarte)" },
-        { keys: "Rechtsklick", description: "Kontextmenü" },
+        { keys: "Rechtsklick", description: "Kontextmenü (Ausrichten bei Mehrfachauswahl)" },
       ],
     },
     {
@@ -110,6 +110,7 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
       items: [
         { keys: "Esc", description: "Auswahl / Verbindungsmodus aufheben" },
         { keys: `${mod} + A`, description: "Alle Karten der Ebene auswählen" },
+        { keys: `${mod} + D`, description: "Auswahl duplizieren" },
         { keys: "Entf / Rücktaste", description: "Ausgewählten Pfeil löschen" },
         { keys: "Leertaste (halten)", description: "Pan-Modus für Linksklick" },
       ],
