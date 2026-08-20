@@ -39,7 +39,7 @@ import {
   type SymbolType,
 } from "@/lib/diagram-symbol";
 import { exportVisibleCanvasToPdf } from "@/lib/canvas-pdf-export";
-import { exportVisibleCanvasToPng, exportVisibleCanvasToSvg } from "@/lib/canvas-image-export";
+import { exportVisibleCanvasToPng, exportCanvasSceneToSvg } from "@/lib/canvas-image-export";
 import { exportCanvasAsPrompt } from "@/lib/prompt-export";
 import { relationsForContext } from "@/lib/task-relations";
 import { isTaskMarkedDone } from "@/lib/task-tags";
@@ -458,9 +458,28 @@ export function TaskCanvas({
 
   const exportVisibleViewportImage = useCallback(
     async (kind: "png" | "svg") => {
+      if (pdfExporting || imageExporting) return;
+      if (kind === "svg") {
+        setImageExporting("svg");
+        try {
+          exportCanvasSceneToSvg({
+            nodes,
+            relations: visibleRelations,
+            groups: canvasGroups,
+            completedTag,
+          });
+        } catch (err) {
+          console.error("Canvas-SVG-Export fehlgeschlagen", err);
+          window.alert("SVG-Export fehlgeschlagen. Bitte erneut versuchen.");
+        } finally {
+          setImageExporting(null);
+        }
+        return;
+      }
+
       const el = shellRef.current;
-      if (!el || pdfExporting || imageExporting) return;
-      setImageExporting(kind);
+      if (!el) return;
+      setImageExporting("png");
       flushSync(() => {
         setContextMenu(null);
         setLasso(null);
@@ -471,11 +490,10 @@ export function TaskCanvas({
         setSelectedGroupId(null);
       });
       try {
-        if (kind === "png") await exportVisibleCanvasToPng(el);
-        else await exportVisibleCanvasToSvg(el);
+        await exportVisibleCanvasToPng(el);
       } catch (err) {
-        console.error(`Canvas-${kind.toUpperCase()}-Export fehlgeschlagen`, err);
-        window.alert(`${kind.toUpperCase()}-Export fehlgeschlagen. Bitte erneut versuchen.`);
+        console.error("Canvas-PNG-Export fehlgeschlagen", err);
+        window.alert("PNG-Export fehlgeschlagen. Bitte erneut versuchen.");
       } finally {
         setImageExporting(null);
       }
@@ -483,6 +501,10 @@ export function TaskCanvas({
     [
       pdfExporting,
       imageExporting,
+      nodes,
+      visibleRelations,
+      canvasGroups,
+      completedTag,
       setSelectedCanvasNodeId,
       setSelectedRelationId,
       clearCanvasMultiSelect,
@@ -753,7 +775,7 @@ export function TaskCanvas({
         <button
           type="button"
           className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-60"
-          title="Aktuell sichtbaren Canvas-Ausschnitt als SVG herunterladen"
+          title="Canvas als SVG mit ET2-Layout exportieren (in diagrams.net/draw.io weiterbearbeitbar)"
           disabled={pdfExporting || imageExporting !== null}
           onClick={() => {
             void exportVisibleViewportImage("svg");
@@ -1519,7 +1541,7 @@ export function TaskCanvas({
                     void exportVisibleViewportImage("svg");
                   }}
                 >
-                  SVG-Export (Ansicht)
+                  SVG-Export (Draw.io)
                 </button>
               </>
             )}

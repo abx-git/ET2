@@ -1,8 +1,11 @@
 /**
- * PNG-/SVG-Export des aktuell sichtbaren Canvas-Ausschnitts.
+ * PNG-Export des sichtbaren Canvas-Ausschnitts (Screenshot)
+ * und SVG-Export als echte SVG-Syntax mit ET2-Layout (draw.io-tauglich).
  */
 
-import { toPng, toSvg } from "html-to-image";
+import { toPng } from "html-to-image";
+
+import { buildCanvasSvg, type CanvasSvgScene } from "@/lib/canvas-svg-export";
 
 const EXPORT_ATTR = "data-et2-canvas-exporting";
 
@@ -101,20 +104,18 @@ export async function exportVisibleCanvasToPng(
   downloadDataUrl(filename, dataUrl);
 }
 
-/** Erfasst den sichtbaren Canvas-Shell-Ausschnitt und lädt ihn als SVG herunter. */
-export async function exportVisibleCanvasToSvg(
-  shell: HTMLElement,
+/**
+ * Exportiert die aktuelle Canvas-Ebene als SVG-Syntax (rect/path/text/line)
+ * in ET2-Weltkoordinaten. Draw.io öffnet die Datei über das eingebettete mxfile.
+ */
+export function exportCanvasSceneToSvg(
+  scene: CanvasSvgScene,
   options: ExportVisibleCanvasImageOptions = {},
-): Promise<void> {
+): void {
   const filename = options.filename ?? defaultCanvasSvgFilename();
-  const dataUrl = await withExportChrome(shell, () =>
-    toSvg(shell, {
-      width: Math.max(1, Math.round(shell.clientWidth)),
-      height: Math.max(1, Math.round(shell.clientHeight)),
-      backgroundColor: getComputedStyle(shell).backgroundColor || "#edf0f4",
-      cacheBust: true,
-      filter: (node) => (node instanceof HTMLElement ? captureFilter(node) : true),
-    }),
-  );
-  downloadDataUrl(filename, dataUrl);
+  const svg = buildCanvasSvg(scene);
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  downloadDataUrl(filename, url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
