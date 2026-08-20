@@ -14,7 +14,13 @@ import { contextChildren } from "@/lib/board-context";
 import { nodeMatchesBoardFilters } from "@/lib/board-filters";
 import { nodeHasCanvasPosition } from "@/lib/canvas-layout";
 import { compareCanvasStackOrder } from "@/lib/canvas-stack";
-import { isNodeInsideGroup } from "@/lib/canvas-group";
+import { containedNodeIds } from "@/lib/canvas-group";
+import {
+  ALIGN_MODE_LABELS,
+  ALIGN_MODES_THREE,
+  ALIGN_MODES_TWO,
+  type AlignMode,
+} from "@/lib/element-align";
 import {
   DEFAULT_CANVAS_VIEWPORT,
   fitViewportToBounds,
@@ -33,6 +39,7 @@ import {
   type SymbolType,
 } from "@/lib/diagram-symbol";
 import { exportVisibleCanvasToPdf } from "@/lib/canvas-pdf-export";
+import { exportVisibleCanvasToPng, exportVisibleCanvasToSvg } from "@/lib/canvas-image-export";
 import { exportCanvasAsPrompt } from "@/lib/prompt-export";
 import { relationsForContext } from "@/lib/task-relations";
 import { isTaskMarkedDone } from "@/lib/task-tags";
@@ -110,6 +117,9 @@ export function TaskCanvas({
   const addCanvasGroup = useTaskTreeStore((s) => s.addCanvasGroup);
   const updateCanvasGroup = useTaskTreeStore((s) => s.updateCanvasGroup);
   const removeCanvasGroup = useTaskTreeStore((s) => s.removeCanvasGroup);
+  const moveCanvasGroupBy = useTaskTreeStore((s) => s.moveCanvasGroupBy);
+  const alignCanvasSelection = useTaskTreeStore((s) => s.alignCanvasSelection);
+  const duplicateCanvasSelection = useTaskTreeStore((s) => s.duplicateCanvasSelection);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const [panning, setPanning] = useState(false);
@@ -124,11 +134,13 @@ export function TaskCanvas({
   const [placingSymbolType, setPlacingSymbolType] = useState<SymbolType | null>(null);
   const [contextSymbolGroup, setContextSymbolGroup] = useState<"useCase" | "flowchart" | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
+  const [imageExporting, setImageExporting] = useState<"png" | "svg" | null>(null);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const spaceDown = useRef(false);
   const multiDrag = useRef<{ ox: number; oy: number } | null>(null);
   const lassoJustFinished = useRef(false);
   const panMoved = useRef(false);
+  const groupDragMembers = useRef<Record<string, string[]>>({});
 
   const contextKids = useMemo(
     () => contextChildren(roots, contextNodeId, { includeSymbols: true }),
@@ -233,6 +245,13 @@ export function TaskCanvas({
           useTaskTreeStore.setState({ selectedCanvasNodeIds: allIds, selectedCanvasNodeId: null });
         }
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        if (shouldIgnoreCardKeyboard(e)) return;
+        const store = useTaskTreeStore.getState();
+        if (store.boardViewMode !== "canvas") return;
+        e.preventDefault();
+        duplicateCanvasSelection();
+      }
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") {
@@ -255,6 +274,7 @@ export function TaskCanvas({
     setSelectedRelationId,
     setSelectedCanvasNodeId,
     clearCanvasMultiSelect,
+    duplicateCanvasSelection,
   ]);
 
   useEffect(() => {
@@ -378,9 +398,8 @@ export function TaskCanvas({
 
   const exportVisibleViewportPdf = useCallback(async () => {
     const el = shellRef.current;
-    if (!el || pdfExporting) return;
+    if (!el || pdfExporting || imageExporting) return;
     setPdfExporting(true);
-    // UI-Chrome vor dem Screenshot entfernen (Handles, Menüs, Lasso)
     flushSync(() => {
       setContextMenu(null);
       setLasso(null);
@@ -400,10 +419,61 @@ export function TaskCanvas({
     }
   }, [
     pdfExporting,
+    imageExporting,
     setSelectedCanvasNodeId,
     setSelectedRelationId,
     clearCanvasMultiSelect,
   ]);
+
+  const exportVisibleViewportImage = useCallback(
+    async (kind: "png" | "svg") => {
+      const el = shellRef.current;
+      if (!el || pdfExporting || imageExporting) return;
+      setImageExporting(kind);
+      flushSync(() => {
+        setContextMenu(null);
+        setLasso(null);
+        setSymbolPaletteOpen(false);
+        setSelectedCanvasNodeId(null);
+        setSelectedRelationId(null);
+        clearCanvasMultiSelect();
+        setSelectedGroupId(null);
+      });
+      try {
+        if (kind === "png") await exportVisibleCanvasToPng(el);
+        else await exportVisibleCanvasToSvg(el);
+      } catch (err) {
+        console.error(`Canvas-${kind.toUpperCase()}-Export fehlgeschlagen`, err);
+        window.alert(`${kind.toUpperCase()}-Export fehlgeschlagen. Bitte erneut versuchen.`);
+      } finally {
+        setImageExporting(null);
+      }
+    },
+    [
+      pdfExporting,
+      imageExporting,
+      setSelectedCanvasNodeId,
+      setSelectedRelationId,
+      clearCanvasMultiSelect,
+    ],
+  );
+
+  const selectCanvasNodeForMenu = useCallback((nodeId: string) => {
+    const multi = useTaskTreeStore.getState().selectedCanvasNodeIds;
+    if (multi.length > 1 && multi.includes(nodeId)) {
+      useTaskTreeStore.setState({ selectedCanvasNodeId: nodeId });
+      return;
+    }
+    setSelectedCanvasNodeId(nodeId);
+  }, [setSelectedCanvasNodeId]);
+
+  const applyAlign = useCallback(
+    (mode: AlignMode, referenceId?: string) => {
+      alignCanvasSelection(mode, referenceId);
+      setContextMenu(null);
+    },
+    [alignCanvasSelection],
+  );
 
   const handleCardSelect = useCallback(
     (nodeId: string, shiftKey: boolean) => {
@@ -544,12 +614,71 @@ export function TaskCanvas({
           type="button"
           className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-60"
           title="Aktuell sichtbaren Canvas-Ausschnitt als PDF herunterladen"
-          disabled={pdfExporting}
+          disabled={pdfExporting || imageExporting !== null}
           onClick={() => {
             void exportVisibleViewportPdf();
           }}
         >
           {pdfExporting ? "PDF…" : "PDF-Export"}
+        </button>
+        <button
+          type="button"
+          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-60"
+          title="Aktuell sichtbaren Canvas-Ausschnitt als PNG herunterladen"
+          disabled={pdfExporting || imageExporting !== null}
+          onClick={() => {
+            void exportVisibleViewportImage("png");
+          }}
+        >
+          {imageExporting === "png" ? "PNG…" : "PNG"}
+        </button>
+        <button
+          type="button"
+          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-60"
+          title="Aktuell sichtbaren Canvas-Ausschnitt als SVG herunterladen"
+          disabled={pdfExporting || imageExporting !== null}
+          onClick={() => {
+            void exportVisibleViewportImage("svg");
+          }}
+        >
+          {imageExporting === "svg" ? "SVG…" : "SVG"}
+        </button>
+        {selectedCanvasNodeIds.length >= 2 ? (
+          <select
+            className="rounded border border-slate-300 bg-white px-1 py-0.5"
+            value=""
+            title="Ausgewählte Karten ausrichten"
+            onChange={(e) => {
+              const mode = e.target.value as AlignMode;
+              if (!mode) return;
+              applyAlign(mode);
+            }}
+          >
+            <option value="" disabled>
+              Ausrichten…
+            </option>
+            {ALIGN_MODES_TWO.map((mode) => (
+              <option key={mode} value={mode}>
+                {ALIGN_MODE_LABELS[mode]}
+              </option>
+            ))}
+            {selectedCanvasNodeIds.length >= 3
+              ? ALIGN_MODES_THREE.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {ALIGN_MODE_LABELS[mode]}
+                  </option>
+                ))
+              : null}
+          </select>
+        ) : null}
+        <button
+          type="button"
+          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
+          title="Auswahl duplizieren (Ctrl/Cmd+D)"
+          disabled={!selectedCanvasNodeId && selectedCanvasNodeIds.length === 0}
+          onClick={() => duplicateCanvasSelection()}
+        >
+          Duplizieren
         </button>
         <button
           type="button"
@@ -818,16 +947,15 @@ export function TaskCanvas({
               selected={selectedGroupId === group.id}
               zoom={canvasViewport.zoom}
               onSelect={() => setSelectedGroupId(group.id)}
-              onMove={(x, y, delta) => {
-                // Move cards whose center is inside the group bounding box
-                for (const n of nodes) {
-                  const nw = n.width ?? 220;
-                  const nh = n.height ?? 120;
-                  if (isNodeInsideGroup(n.x ?? 0, n.y ?? 0, nw, nh, group)) {
-                    moveCanvasNode(n.id, (n.x ?? 0) + delta.dx, (n.y ?? 0) + delta.dy);
-                  }
-                }
-                updateCanvasGroup(group.id, { x, y });
+              onMoveStart={() => {
+                groupDragMembers.current[group.id] = containedNodeIds(nodes, group);
+              }}
+              onMove={(_x, _y, delta) => {
+                const members = groupDragMembers.current[group.id] ?? [];
+                moveCanvasGroupBy(group.id, delta.dx, delta.dy, members);
+              }}
+              onMoveEnd={() => {
+                delete groupDragMembers.current[group.id];
               }}
               onResize={(w, h) => updateCanvasGroup(group.id, { width: w, height: h })}
               onLabelChange={(label) => updateCanvasGroup(group.id, { label })}
@@ -855,7 +983,7 @@ export function TaskCanvas({
                   if (!el) return;
                   const rect = el.getBoundingClientRect();
                   setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, nodeId: node.id });
-                  setSelectedCanvasNodeId(node.id);
+                  selectCanvasNodeForMenu(node.id);
                 }}
                 multiSelected={selectedCanvasNodeIds.includes(node.id) && selectedCanvasNodeIds.length > 1}
               />
@@ -885,7 +1013,7 @@ export function TaskCanvas({
                   if (!el) return;
                   const rect = el.getBoundingClientRect();
                   setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, nodeId: node.id });
-                  setSelectedCanvasNodeId(node.id);
+                  selectCanvasNodeForMenu(node.id);
                 }}
                 multiSelected={selectedCanvasNodeIds.includes(node.id) && selectedCanvasNodeIds.length > 1}
               />
@@ -985,6 +1113,46 @@ export function TaskCanvas({
                       >
                         ✎ Titel bearbeiten
                       </button>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                        onClick={() => {
+                          duplicateCanvasSelection();
+                          setContextMenu(null);
+                        }}
+                      >
+                        Duplizieren
+                      </button>
+                      {selectedCanvasNodeIds.length >= 2 &&
+                      selectedCanvasNodeIds.includes(contextMenu.nodeId!) ? (
+                        <div className="border-t border-slate-100 pt-1">
+                          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                            Ausrichten
+                          </p>
+                          {ALIGN_MODES_TWO.map((mode) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-slate-800 hover:bg-slate-100"
+                              onClick={() => applyAlign(mode, contextMenu.nodeId)}
+                            >
+                              {ALIGN_MODE_LABELS[mode]}
+                            </button>
+                          ))}
+                          {selectedCanvasNodeIds.length >= 3
+                            ? ALIGN_MODES_THREE.map((mode) => (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-slate-800 hover:bg-slate-100"
+                                  onClick={() => applyAlign(mode, contextMenu.nodeId)}
+                                >
+                                  {ALIGN_MODE_LABELS[mode]}
+                                </button>
+                              ))
+                            : null}
+                        </div>
+                      ) : null}
                       {symbol ? (
                         <>
                           <hr className="my-1 border-slate-100" />
@@ -1205,12 +1373,32 @@ export function TaskCanvas({
                 <button
                   type="button"
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100 disabled:opacity-60"
-                  disabled={pdfExporting}
+                  disabled={pdfExporting || imageExporting !== null}
                   onClick={() => {
                     void exportVisibleViewportPdf();
                   }}
                 >
                   📄 PDF-Export (Ansicht)
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100 disabled:opacity-60"
+                  disabled={pdfExporting || imageExporting !== null}
+                  onClick={() => {
+                    void exportVisibleViewportImage("png");
+                  }}
+                >
+                  PNG-Export (Ansicht)
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100 disabled:opacity-60"
+                  disabled={pdfExporting || imageExporting !== null}
+                  onClick={() => {
+                    void exportVisibleViewportImage("svg");
+                  }}
+                >
+                  SVG-Export (Ansicht)
                 </button>
               </>
             )}

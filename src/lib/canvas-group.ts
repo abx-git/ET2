@@ -2,6 +2,9 @@
  * Gruppierungs-Box im Canvas: visuelle Umrandung, die Karten zusammenfasst.
  * Karten, deren Mittelpunkt im Bereich der Box liegt, gelten als gruppiert.
  */
+
+import { taskCardRect } from "@/lib/connector-geometry";
+import type { TaskNode } from "@/types/task-node";
 export interface CanvasGroup {
   id: string;
   label: string;
@@ -44,4 +47,14 @@ export function isNodeInsideGroup(
     nodeX + nodeW <= group.x + group.width &&
     nodeY + nodeH <= group.y + group.height
   );
+}
+
+/** IDs der Karten, die vollständig in der Gruppe liegen (Mitgliedschaft beim Drag-Start). */
+export function containedNodeIds(nodes: ReadonlyArray<TaskNode>, group: CanvasGroup): string[] {
+  return nodes
+    .filter((n) => {
+      const r = taskCardRect(n);
+      return isNodeInsideGroup(r.x, r.y, r.w, r.h, group);
+    })
+    .map((n) => n.id);
 }

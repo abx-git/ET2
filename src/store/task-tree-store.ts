@@ -88,6 +88,8 @@ import {
   type CanvasViewport,
 } from "@/lib/canvas-viewport";
 import type { CanvasGroup } from "@/lib/canvas-group";
+import { applyGeometryPatches, computeAlignPatches, type AlignMode } from "@/lib/element-align";
+import { duplicateCanvasNodes } from "@/lib/canvas-duplicate";
 import {
   computeCanvasZIndexPatches,
   type CanvasZAction,
@@ -119,6 +121,7 @@ export type BoardHistorySlice = {
   columnTitleOverrides: Record<number, string>;
   relations: TaskRelation[];
   appearance: BoardAppearance;
+  canvasGroups: Record<string, CanvasGroup[]>;
 };
 
 export type BoardViewMode = "list" | "canvas" | "presentation";
@@ -144,6 +147,7 @@ function partializeBoardHistory(state: TaskTreeState): BoardHistorySlice {
     columnTitleOverrides: state.columnTitleOverrides,
     relations: state.relations,
     appearance: state.appearance,
+    canvasGroups: state.canvasGroups,
   };
 }
 
@@ -167,7 +171,8 @@ function boardHistoryEqual(a: BoardHistorySlice, b: BoardHistorySlice): boolean 
     a.noteAccentColor === b.noteAccentColor &&
     a.columnTitleOverrides === b.columnTitleOverrides &&
     a.relations === b.relations &&
-    a.appearance === b.appearance
+    a.appearance === b.appearance &&
+    a.canvasGroups === b.canvasGroups
   );
 }
 
@@ -320,6 +325,12 @@ export interface TaskTreeState {
   addCanvasGroup: (group: CanvasGroup) => void;
   updateCanvasGroup: (id: string, patch: Partial<Omit<CanvasGroup, "id">>) => void;
   removeCanvasGroup: (id: string) => void;
+  /** Gruppe und festgehaltene Mitglieder um ein Delta verschieben (ein Undo-Schritt). */
+  moveCanvasGroupBy: (id: string, dx: number, dy: number, memberIds: string[]) => void;
+  /** Auswahl auf dem Canvas ausrichten / verteilen / gleiche Größe. */
+  alignCanvasSelection: (mode: AlignMode, referenceId?: string) => void;
+  /** Ausgewählte Canvas-Karten duplizieren (⌘D). Liefert die neuen IDs. */
+  duplicateCanvasSelection: () => string[];
   /** Connect-Modus: nächster Klick wählt Quelle/Ziel. */
   relationConnectMode: boolean;
   setRelationConnectMode: (on: boolean) => void;
@@ -1091,6 +1102,78 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     set({ canvasGroups: { ...prev, [key]: list.filter((g) => g.id !== id) } });
   },
 
+  moveCanvasGroupBy: (id, dx, dy, memberIds) => {
+    if (dx === 0 && dy === 0) return;
+    set((s) => {
+      const key = s.contextNodeId ?? "__root__";
+      const prev = s.canvasGroups;
+      const list = prev[key] ?? [];
+      if (!list.some((g) => g.id === id)) return {};
+      const nextGroups = {
+        ...prev,
+        [key]: list.map((g) => (g.id === id ? { ...g, x: g.x + dx, y: g.y + dy } : g)),
+      };
+      if (memberIds.length === 0) {
+        return { canvasGroups: nextGroups };
+      }
+      const idSet = new Set(memberIds);
+      const nextRoots = structuredClone(s.roots);
+      const moveNode = (forest: TaskNode[]) => {
+        for (const n of forest) {
+          if (idSet.has(n.id)) {
+            n.x = (n.x ?? 0) + dx;
+            n.y = (n.y ?? 0) + dy;
+          }
+          if (n.children.length > 0) moveNode(n.children);
+        }
+      };
+      moveNode(nextRoots);
+      return { roots: nextRoots, canvasGroups: nextGroups };
+    });
+  },
+
+  alignCanvasSelection: (mode, referenceId) => {
+    set((s) => {
+      const ids =
+        s.selectedCanvasNodeIds.length > 0
+          ? s.selectedCanvasNodeIds
+          : s.selectedCanvasNodeId
+            ? [s.selectedCanvasNodeId]
+            : [];
+      if (ids.length < 2) return {};
+      const idSet = new Set(ids);
+      const siblings = contextChildren(s.roots, s.contextNodeId, { includeSymbols: true });
+      const selected = siblings.filter((n) => idSet.has(n.id));
+      const patches = computeAlignPatches(selected, mode, referenceId ?? s.selectedCanvasNodeId ?? undefined);
+      if (patches.length === 0) return {};
+      return { roots: applyGeometryPatches(s.roots, patches) };
+    });
+  },
+
+  duplicateCanvasSelection: () => {
+    const s = get();
+    const ids =
+      s.selectedCanvasNodeIds.length > 0
+        ? s.selectedCanvasNodeIds
+        : s.selectedCanvasNodeId
+          ? [s.selectedCanvasNodeId]
+          : [];
+    const result = duplicateCanvasNodes(s.roots, s.relations ?? [], ids, {
+      clipboardRoots: s.clipboardRoots,
+    });
+    if (!result) return [];
+    const nextRoots = refreshCalculatedEffortsInTree(result.roots, s.completedTag);
+    set({
+      roots: nextRoots,
+      pathIds: normalizePathIds(nextRoots, s.pathIds),
+      relations: sanitizeRelations(nextRoots, result.relations),
+      selectedCanvasNodeIds: result.newIds,
+      selectedCanvasNodeId: result.newIds.length === 1 ? result.newIds[0]! : result.newIds[result.newIds.length - 1]!,
+      selectedRelationId: null,
+    });
+    return result.newIds;
+  },
+
   setRelationConnectMode: (on) => {
     set({
       relationConnectMode: on,
@@ -1490,8 +1573,10 @@ export const useTaskTreeStore = create<TaskTreeState>()(
       clipboardRoots: payload.clipboardRoots ?? [],
       relations: sanitizeRelations(roots, payload.relations ?? []),
       appearance: normalizeAppearance(payload.appearance ?? DEFAULT_APPEARANCE),
+      canvasGroups: {},
       selectedRelationId: null,
       selectedCanvasNodeId: null,
+      selectedCanvasNodeIds: [] as string[],
       relationDraftSourceId: null,
     });
   },
