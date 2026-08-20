@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildCanvasSvg, extractDrawioMxfileFromSvg } from "./canvas-svg-export";
+import { buildCanvasSvg, buildDrawioClipboardXml, extractDrawioMxfileFromSvg } from "./canvas-svg-export";
 import type { CanvasGroup } from "./canvas-group";
 import type { TaskNode } from "@/types/task-node";
 import type { TaskRelation } from "@/types/task-relation";
@@ -110,5 +110,40 @@ describe("buildCanvasSvg", () => {
       nodes: [card("a", "Tilt", { x: 0, y: 0, width: 100, height: 50, rotation: 15 })],
     });
     expect(svg).toContain('transform="rotate(15 50 25)"');
+  });
+});
+
+describe("buildDrawioClipboardXml", () => {
+  it("emits a pasteable mxGraphModel without mxfile wrapper", () => {
+    const xml = buildDrawioClipboardXml({ nodes: [card("a", "Alpha")] });
+    expect(xml.startsWith("<mxGraphModel")).toBe(true);
+    expect(xml).toContain("</mxGraphModel>");
+    expect(xml).not.toContain("<mxfile");
+    expect(xml).toContain("<mxCell id=\"0\"/>");
+    expect(xml).toContain("<mxCell id=\"1\" parent=\"0\"/>");
+  });
+
+  it("shifts the cluster to the origin while keeping relative layout", () => {
+    const xml = buildDrawioClipboardXml({
+      nodes: [
+        card("a", "Alpha", { x: 80, y: 90, width: 220, height: 120 }),
+        card("b", "Beta", { x: 400, y: 90, width: 220, height: 120 }),
+      ],
+    });
+    expect(xml).toContain('x="0" y="0" width="220" height="120"');
+    expect(xml).toContain('x="320" y="0" width="220" height="120"');
+  });
+
+  it("keeps connected edges for draw.io paste", () => {
+    const xml = buildDrawioClipboardXml({
+      nodes: [
+        card("a", "A", { x: 0, y: 0, width: 100, height: 50 }),
+        card("b", "B", { x: 200, y: 0, width: 100, height: 50 }),
+      ],
+      relations: [{ id: "r1", sourceId: "a", targetId: "b", type: "precedes" }],
+    });
+    expect(xml).toContain('source="n_a"');
+    expect(xml).toContain('target="n_b"');
+    expect(xml).toContain("edge=\"1\"");
   });
 });

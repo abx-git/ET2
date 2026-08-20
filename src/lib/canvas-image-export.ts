@@ -5,7 +5,8 @@
 
 import { toPng } from "html-to-image";
 
-import { buildCanvasSvg, type CanvasSvgScene } from "@/lib/canvas-svg-export";
+import { writeClipboardText } from "@/lib/clipboard";
+import { buildCanvasSvg, buildDrawioClipboardXml, type CanvasSvgScene } from "@/lib/canvas-svg-export";
 
 const EXPORT_ATTR = "data-et2-canvas-exporting";
 
@@ -118,4 +119,31 @@ export function exportCanvasSceneToSvg(
   const url = URL.createObjectURL(blob);
   downloadDataUrl(filename, url);
   window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** Kopiert das Canvas als draw.io-mxGraphModel in die System-Zwischenablage. */
+export async function copyCanvasSceneToDrawioClipboard(scene: CanvasSvgScene): Promise<boolean> {
+  const xml = buildDrawioClipboardXml(scene);
+  try {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.clipboard?.write &&
+      typeof ClipboardItem !== "undefined"
+    ) {
+      const html = `<div data-type="text/plain">${xml
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")}</div>`;
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/plain": new Blob([xml], { type: "text/plain" }),
+          "text/html": new Blob([html], { type: "text/html" }),
+        }),
+      ]);
+      return true;
+    }
+  } catch {
+    /* Fallback auf reinen Text */
+  }
+  return writeClipboardText(xml);
 }

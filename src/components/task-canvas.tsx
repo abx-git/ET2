@@ -39,7 +39,7 @@ import {
   type SymbolType,
 } from "@/lib/diagram-symbol";
 import { exportVisibleCanvasToPdf } from "@/lib/canvas-pdf-export";
-import { exportVisibleCanvasToPng, exportCanvasSceneToSvg } from "@/lib/canvas-image-export";
+import { exportVisibleCanvasToPng, exportCanvasSceneToSvg, copyCanvasSceneToDrawioClipboard } from "@/lib/canvas-image-export";
 import { exportCanvasAsPrompt } from "@/lib/prompt-export";
 import { relationsForContext } from "@/lib/task-relations";
 import { isTaskMarkedDone } from "@/lib/task-tags";
@@ -166,6 +166,7 @@ export function TaskCanvas({
   const [contextSymbolGroup, setContextSymbolGroup] = useState<"useCase" | "flowchart" | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [imageExporting, setImageExporting] = useState<"png" | "svg" | null>(null);
+  const [drawioCopied, setDrawioCopied] = useState(false);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const spaceDown = useRef(false);
   const multiDrag = useRef<{ ox: number; oy: number } | null>(null);
@@ -511,6 +512,21 @@ export function TaskCanvas({
     ],
   );
 
+  const copyCanvasToDrawio = useCallback(async () => {
+    const ok = await copyCanvasSceneToDrawioClipboard({
+      nodes,
+      relations: visibleRelations,
+      groups: canvasGroups,
+      completedTag,
+    });
+    if (!ok) {
+      window.alert("In die Zwischenablage kopieren ist in diesem Kontext nicht möglich.");
+      return;
+    }
+    setDrawioCopied(true);
+    window.setTimeout(() => setDrawioCopied(false), 1400);
+  }, [nodes, visibleRelations, canvasGroups, completedTag]);
+
   const selectCanvasNodeForMenu = useCallback((nodeId: string) => {
     const multi = useTaskTreeStore.getState().selectedCanvasNodeIds;
     if (multi.length > 1 && multi.includes(nodeId)) {
@@ -782,6 +798,16 @@ export function TaskCanvas({
           }}
         >
           {imageExporting === "svg" ? "SVG…" : "SVG"}
+        </button>
+        <button
+          type="button"
+          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
+          title="Canvas als Draw.io-Diagramm in die Zwischenablage kopieren — in diagrams.net mit Strg/Cmd+V einfügen"
+          onClick={() => {
+            void copyCanvasToDrawio();
+          }}
+        >
+          {drawioCopied ? "✓ Kopiert" : "Draw.io kopieren"}
         </button>
         {selectedCanvasNodeIds.length >= 2 ? (
           <select
@@ -1542,6 +1568,16 @@ export function TaskCanvas({
                   }}
                 >
                   SVG-Export (Draw.io)
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    void copyCanvasToDrawio();
+                    setContextMenu(null);
+                  }}
+                >
+                  {drawioCopied ? "✓ In Zwischenablage" : "📋 Nach Draw.io kopieren"}
                 </button>
               </>
             )}

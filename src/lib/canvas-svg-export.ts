@@ -446,7 +446,11 @@ function cardMxValue(node: TaskNode, completedTag: string): string {
   return parts.join("<br>");
 }
 
-function buildDrawioMxfile(scene: CanvasSvgScene, bounds: ElementRect): string {
+function buildMxGraphModelXml(
+  scene: CanvasSvgScene,
+  bounds: ElementRect,
+  offset: { x: number; y: number } = { x: 0, y: 0 },
+): string {
   const completedTag = scene.completedTag ?? DEFAULT_COMPLETED_TAG;
   const relations = scene.relations ?? [];
   const used = new Set(["0", "1"]);
@@ -479,7 +483,7 @@ function buildDrawioMxfile(scene: CanvasSvgScene, bounds: ElementRect): string {
       fontStyle: 1,
     });
     cells.push(
-      `<mxCell id="${xmlEscape(id)}" value="${xmlEscape(htmlEscape(group.label || "Gruppe"))}" style="${style}" vertex="1" parent="1"><mxGeometry x="${num(group.x)}" y="${num(group.y)}" width="${num(group.width)}" height="${num(group.height)}" as="geometry"/></mxCell>`,
+      `<mxCell id="${xmlEscape(id)}" value="${xmlEscape(htmlEscape(group.label || "Gruppe"))}" style="${style}" vertex="1" parent="1"><mxGeometry x="${num(group.x - offset.x)}" y="${num(group.y - offset.y)}" width="${num(group.width)}" height="${num(group.height)}" as="geometry"/></mxCell>`,
     );
   }
 
@@ -492,12 +496,12 @@ function buildDrawioMxfile(scene: CanvasSvgScene, bounds: ElementRect): string {
     if (isSymbolNode(node)) {
       const style = `${symbolMxStyle(node)}${rotation}`;
       cells.push(
-        `<mxCell id="${xmlEscape(id)}" value="${xmlEscape(htmlEscape(nodeDisplayTitle(node)))}" style="${style}" vertex="1" parent="1"><mxGeometry x="${num(rect.x)}" y="${num(rect.y)}" width="${num(rect.w)}" height="${num(rect.h)}" as="geometry"/></mxCell>`,
+        `<mxCell id="${xmlEscape(id)}" value="${xmlEscape(htmlEscape(nodeDisplayTitle(node)))}" style="${style}" vertex="1" parent="1"><mxGeometry x="${num(rect.x - offset.x)}" y="${num(rect.y - offset.y)}" width="${num(rect.w)}" height="${num(rect.h)}" as="geometry"/></mxCell>`,
       );
     } else {
       const style = `${cardMxStyle(node)}${rotation}`;
       cells.push(
-        `<mxCell id="${xmlEscape(id)}" value="${xmlEscape(cardMxValue(node, completedTag))}" style="${style}" vertex="1" parent="1"><mxGeometry x="${num(rect.x)}" y="${num(rect.y)}" width="${num(rect.w)}" height="${num(rect.h)}" as="geometry"/></mxCell>`,
+        `<mxCell id="${xmlEscape(id)}" value="${xmlEscape(cardMxValue(node, completedTag))}" style="${style}" vertex="1" parent="1"><mxGeometry x="${num(rect.x - offset.x)}" y="${num(rect.y - offset.y)}" width="${num(rect.w)}" height="${num(rect.h)}" as="geometry"/></mxCell>`,
       );
     }
   }
@@ -536,9 +540,20 @@ function buildDrawioMxfile(scene: CanvasSvgScene, bounds: ElementRect): string {
     );
   }
 
-  const pageW = Math.max(1, Math.round(bounds.x + bounds.w));
-  const pageH = Math.max(1, Math.round(bounds.y + bounds.h));
-  return `<mxfile host="ET2" agent="ET2 ${APP_VERSION}" type="device"><diagram id="et2-canvas" name="Canvas"><mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="${pageW}" pageHeight="${pageH}" math="0" shadow="0"><root>${cells.join("")}</root></mxGraphModel></diagram></mxfile>`;
+  const pageW = Math.max(1, Math.round(Math.max(bounds.w, bounds.x + bounds.w - offset.x)));
+  const pageH = Math.max(1, Math.round(Math.max(bounds.h, bounds.y + bounds.h - offset.y)));
+  return `<mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="${pageW}" pageHeight="${pageH}" math="0" shadow="0"><root>${cells.join("")}</root></mxGraphModel>`;
+}
+
+function buildDrawioMxfile(scene: CanvasSvgScene, bounds: ElementRect): string {
+  const model = buildMxGraphModelXml(scene, bounds);
+  return `<mxfile host="ET2" agent="ET2 ${APP_VERSION}" type="device"><diagram id="et2-canvas" name="Canvas">${model}</diagram></mxfile>`;
+}
+
+/** Draw.io-Zwischenablage: unkomprimiertes mxGraphModel (Strg/Cmd+V in diagrams.net). */
+export function buildDrawioClipboardXml(scene: CanvasSvgScene): string {
+  const bounds = sceneBounds(scene);
+  return buildMxGraphModelXml(scene, bounds, { x: bounds.x + PAD, y: bounds.y + PAD });
 }
 
 function defsForRelations(relations: readonly TaskRelation[]): string {
