@@ -169,7 +169,6 @@ export function NoteEditorDialog({
             <NoteMarkdownEditor
               key={editorKey}
               ref={editorRef}
-              className="mdxeditor-full-height"
               markdown={markdownSeed}
               onChange={(value) => setMarkdown(value)}
               contentEditableClassName="note-mdx-content min-h-[10rem] px-3 py-2 text-sm leading-relaxed text-slate-900 outline-none"

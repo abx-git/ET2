@@ -191,3 +191,50 @@ body {
   font-size: 0.8rem;
   margin: 0.35rem 0;
 }
+
+.note-mdx-editor-host {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+/*
+ * MDXEditor hängt Select/Link-Popover in .mdxeditor-popup-container (z-index: 2).
+ * Der Notiz-Dialog liegt bei z-index 1100 — ohne Anhebung liegen Dropdowns dahinter
+ * (Blocktyp wirkt wie nur „Paragraph“, URL-Dialog verschwindet hinter dem Modal).
+ */
+div.mdxeditor-popup-container {
+  position: absolute;
+  z-index: 1200;
+}
+
+.note-mdx-editor-host .mdxeditor {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.note-mdx-codeblock-fallback {
+  margin: 0.35rem 0;
+}
+
+.note-mdx-codeblock-fallback-input {
+  display: block;
+  width: 100%;
+  min-height: 6rem;
+  resize: vertical;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.4rem;
+  background: #f8fafc;
+  padding: 0.5rem 0.65rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #0f172a;
+  outline: none;
+}
+
+.note-mdx-codeblock-fallback-input:focus {
+  border-color: #94a3b8;
+  background: #fff;
+}
