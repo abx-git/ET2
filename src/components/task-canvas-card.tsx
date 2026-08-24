@@ -511,8 +511,17 @@ export function TaskCanvasCard({
 
         {/* Description */}
         {!note && fieldVisibility.description && node.description.trim() ? (
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <p className="text-[11px] leading-relaxed text-slate-500 overflow-hidden" style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: "unset" }}>{node.description}</p>
+          <div
+            data-card-scroll
+            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onSelect(e.shiftKey);
+            }}
+          >
+            <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-500">
+              {node.description}
+            </p>
           </div>
         ) : null}
 

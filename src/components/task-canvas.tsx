@@ -83,6 +83,13 @@ function mergeCanvasGeom(prev: CanvasGeomOp, next: CanvasGeomOp): CanvasGeomOp {
   return next;
 }
 
+function isScrollableCardTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const el = target.closest("[data-card-scroll]");
+  if (!(el instanceof HTMLElement)) return false;
+  return el.scrollHeight > el.clientHeight + 1;
+}
+
 interface LassoRect {
   x1: number;
   y1: number;
@@ -309,6 +316,7 @@ export function TaskCanvas({
     const el = shellRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey) && isScrollableCardTarget(e.target)) return;
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const vp = useTaskTreeStore.getState().canvasViewport;

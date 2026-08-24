@@ -233,9 +233,7 @@ export function TaskRow({
   const visibleTags = fieldVisibility.tags
     ? tagsWithoutCompletedTag(node.tags, completedTag)
     : [];
-  const descriptionPreview = fieldVisibility.description
-    ? node.description.trim().replace(/\s+/g, " ")
-    : "";
+  const descriptionText = fieldVisibility.description ? node.description.trim() : "";
   const effortTotals =
     fieldVisibility.effort && effortOnTasksEnabled
       ? rollupDisplayTotals(node, completedTag)
@@ -251,7 +249,7 @@ export function TaskRow({
       dueHint ||
         reminderHint ||
         visibleTags.length > 0 ||
-        descriptionPreview ||
+        descriptionText ||
         effortLabel ||
         idLabel ||
         cardLink ||
@@ -544,8 +542,10 @@ export function TaskRow({
         )}
         {showMeta ? (
           <div className="mt-0.5 space-y-0.5">
-            {descriptionPreview ? (
-              <p className="truncate text-[11px] leading-snug text-slate-500">{descriptionPreview}</p>
+            {descriptionText ? (
+              <p className="whitespace-pre-wrap break-words text-[11px] leading-snug text-slate-500">
+                {descriptionText}
+              </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               {dueHint ? (

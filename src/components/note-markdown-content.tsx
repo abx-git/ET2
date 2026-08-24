@@ -105,6 +105,7 @@ export function NoteMarkdownContent({
 
   return (
     <div
+      data-card-scroll={fillContainer || compact ? "" : undefined}
       className={[
         "note-markdown text-[11px] text-slate-700",
         fillContainer
