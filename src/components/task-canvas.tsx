@@ -1,9 +1,10 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
+import { CanvasToolbar } from "@/components/canvas-toolbar";
 import { TaskCanvasCard } from "@/components/task-canvas-card";
 import { TaskCanvasSymbol } from "@/components/task-canvas-symbol";
 import { TaskConnectors } from "@/components/task-connectors";
@@ -47,11 +48,6 @@ import { shouldIgnoreCardKeyboard } from "@/lib/card-keyboard-nav";
 import { isCardNode, isNoteNode, isSymbolNode } from "@/lib/tree-node-kind";
 import { outlineDropFromClientPoint } from "@/lib/outline-dnd";
 import { useTaskTreeStore } from "@/store/task-tree-store";
-import {
-  TASK_RELATION_TYPE_LABELS,
-  TASK_RELATION_TYPES,
-  type TaskRelationType,
-} from "@/types/task-relation";
 
 const WORLD_W = 4000;
 const WORLD_H = 3000;
@@ -180,7 +176,7 @@ export function TaskCanvas({
   );
   const needsCanvasLayout = contextKids.some((n) => !nodeHasCanvasPosition(n));
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!needsCanvasLayout) return;
     ensureContextCanvasLayout();
   }, [needsCanvasLayout, contextNodeId, ensureContextCanvasLayout]);
@@ -412,10 +408,11 @@ export function TaskCanvas({
     [setCanvasDropRef],
   );
 
-  const fitAllCardsInView = useCallback(() => {
+  const fitAllCardsInView = useCallback((): boolean => {
     const el = shellRef.current;
-    if (!el) return;
+    if (!el) return false;
     const { width, height } = el.getBoundingClientRect();
+    if (width <= 0 || height <= 0) return false;
     const rects = [
       ...nodes.map((n) => taskCardRect(n)),
       ...canvasGroups.map((g) => ({ x: g.x, y: g.y, w: g.width, h: g.height })),
@@ -423,10 +420,40 @@ export function TaskCanvas({
     const bounds = unionWorldBounds(rects);
     if (!bounds) {
       setCanvasViewport({ ...DEFAULT_CANVAS_VIEWPORT });
-      return;
+      return true;
     }
     setCanvasViewport(fitViewportToBounds(bounds, width, height));
+    return true;
   }, [nodes, canvasGroups, setCanvasViewport]);
+
+  const fittedContextKeyRef = useRef<string | undefined>(undefined);
+
+  /** Beim Wechsel der Canvas-Ebene (Drill, Brotkrumen, Listen→Canvas) alle Karten einpassen. */
+  useLayoutEffect(() => {
+    if (needsCanvasLayout) return;
+    const key = contextNodeId ?? "__root__";
+    if (fittedContextKeyRef.current === key) return;
+
+    if (fitAllCardsInView()) {
+      fittedContextKeyRef.current = key;
+      return;
+    }
+
+    const el = shellRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (fittedContextKeyRef.current === key) {
+        ro.disconnect();
+        return;
+      }
+      if (fitAllCardsInView()) {
+        fittedContextKeyRef.current = key;
+        ro.disconnect();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [contextNodeId, needsCanvasLayout, fitAllCardsInView]);
 
   const exportVisibleViewportPdf = useCallback(async () => {
     const el = shellRef.current;
@@ -696,252 +723,70 @@ export function TaskCanvas({
   return (
     <div className="flex h-full min-h-0 flex-row">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600">
-        <button
-          type="button"
-          className={[
-            "rounded border px-2 py-1",
-            relationConnectMode
-              ? "border-amber-500 bg-amber-50 text-amber-900"
-              : "border-slate-300 bg-white hover:bg-slate-100",
-          ].join(" ")}
-          onClick={() => {
-            const next = !relationConnectMode;
-            setRelationConnectMode(next);
-            if (!next) setRelationDraftSourceId(null);
-          }}
-        >
-          Verbinden
-        </button>
-        <label className="flex items-center gap-1">
-          Neuer Pfeil
-          <select
-            className="rounded border border-slate-300 bg-white px-1 py-0.5"
-            value={defaultRelationType}
-            title="Typ für neu gezogene Verbindungen (Richtung: Quelle → Ziel)"
-            onChange={(e) => setDefaultRelationType(e.target.value as TaskRelationType)}
-          >
-            {TASK_RELATION_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {TASK_RELATION_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
-          title="Zoom und Position so wählen, dass alle Karten dieser Ebene sichtbar sind"
-          onClick={fitAllCardsInView}
-        >
-          Alles einpassen
-        </button>
-        <button
-          type="button"
-          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
-          onClick={() => setCanvasViewport({ ...DEFAULT_CANVAS_VIEWPORT })}
-        >
-          Ansicht zurücksetzen
-        </button>
-        <button
-          type="button"
-          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
-          title="Alle Karten dieser Ansicht als Text-Prompt in die Zwischenablage kopieren"
-          onClick={() => {
-            const prompt = exportCanvasAsPrompt(nodes, visibleRelations, {
-              contextTitle: contextNodeId
-                ? nodes.length > 0 ? `Canvas-Ansicht (${nodes.length} Karten)` : undefined
-                : "Board-Übersicht",
-            });
-            navigator.clipboard.writeText(prompt).then(() => {
-              // Brief visual feedback
-              const btn = document.activeElement as HTMLElement | null;
-              if (btn) {
-                const orig = btn.textContent;
-                btn.textContent = "✓ Kopiert";
-                setTimeout(() => { btn.textContent = orig; }, 1200);
-              }
-            });
-          }}
-        >
-          Prompt-Export
-        </button>
-        <button
-          type="button"
-          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-60"
-          title="Aktuell sichtbaren Canvas-Ausschnitt als PDF herunterladen"
-          disabled={pdfExporting || imageExporting !== null}
-          onClick={() => {
-            void exportVisibleViewportPdf();
-          }}
-        >
-          {pdfExporting ? "PDF…" : "PDF-Export"}
-        </button>
-        <button
-          type="button"
-          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-60"
-          title="Aktuell sichtbaren Canvas-Ausschnitt als PNG herunterladen"
-          disabled={pdfExporting || imageExporting !== null}
-          onClick={() => {
-            void exportVisibleViewportImage("png");
-          }}
-        >
-          {imageExporting === "png" ? "PNG…" : "PNG"}
-        </button>
-        <button
-          type="button"
-          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-60"
-          title="Canvas als SVG mit ET2-Layout exportieren (in diagrams.net/draw.io weiterbearbeitbar)"
-          disabled={pdfExporting || imageExporting !== null}
-          onClick={() => {
-            void exportVisibleViewportImage("svg");
-          }}
-        >
-          {imageExporting === "svg" ? "SVG…" : "SVG"}
-        </button>
-        <button
-          type="button"
-          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
-          title="Canvas als Draw.io-Diagramm in die Zwischenablage kopieren — in diagrams.net mit Strg/Cmd+V einfügen"
-          onClick={() => {
-            void copyCanvasToDrawio();
-          }}
-        >
-          {drawioCopied ? "✓ Kopiert" : "Draw.io kopieren"}
-        </button>
-        {selectedCanvasNodeIds.length >= 2 ? (
-          <select
-            className="rounded border border-slate-300 bg-white px-1 py-0.5"
-            value=""
-            title="Ausgewählte Karten ausrichten"
-            onChange={(e) => {
-              const mode = e.target.value as AlignMode;
-              if (!mode) return;
-              applyAlign(mode);
-            }}
-          >
-            <option value="" disabled>
-              Ausrichten…
-            </option>
-            {ALIGN_MODES_TWO.map((mode) => (
-              <option key={mode} value={mode}>
-                {ALIGN_MODE_LABELS[mode]}
-              </option>
-            ))}
-            {selectedCanvasNodeIds.length >= 3
-              ? ALIGN_MODES_THREE.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {ALIGN_MODE_LABELS[mode]}
-                  </option>
-                ))
-              : null}
-          </select>
-        ) : null}
-        <button
-          type="button"
-          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100 disabled:opacity-50"
-          title="Auswahl duplizieren (Ctrl/Cmd+D)"
-          disabled={!selectedCanvasNodeId && selectedCanvasNodeIds.length === 0}
-          onClick={() => duplicateCanvasSelection()}
-        >
-          Duplizieren
-        </button>
-        <button
-          type="button"
-          className="rounded border border-slate-300 bg-white px-2 py-1 hover:bg-slate-100"
-          title="Gruppierungs-Box im Canvas erstellen"
-          onClick={() => {
-            const id = `grp-${Date.now().toString(36)}`;
-            addCanvasGroup({
-              id,
-              label: "Neue Gruppe",
-              x: 50,
-              y: 50,
-              width: 400,
-              height: 300,
-            });
-            setSelectedGroupId(id);
-          }}
-        >
-          + Gruppe
-        </button>
-        <div className="relative">
-          <button
-            type="button"
-            className={[
-              "rounded border px-2 py-1",
-              placingSymbolType || symbolPaletteOpen
-                ? "border-violet-500 bg-violet-50 text-violet-900"
-                : "border-slate-300 bg-white hover:bg-slate-100",
-            ].join(" ")}
-            title="Ablaufplan- und Use-Case-Symbole (nur Canvas)"
-            onClick={() => setSymbolPaletteOpen((o) => !o)}
-          >
-            Symbole{placingSymbolType ? "…" : ""}
-          </button>
-          {symbolPaletteOpen ? (
-            <div className="absolute left-0 top-full z-40 mt-1 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
-              {(["useCase", "flowchart"] as const).map((group) => (
-                <div key={group} className="mb-2 last:mb-0">
-                  <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                    {SYMBOL_GROUP_LABELS[group]}
-                  </div>
-                  <div className="flex flex-col gap-0.5">
-                    {listSymbolTypesByGroup(group).map((def) => (
-                      <button
-                        key={def.id}
-                        type="button"
-                        className={[
-                          "rounded px-2 py-1.5 text-left text-xs hover:bg-slate-100",
-                          placingSymbolType === def.id ? "bg-violet-50 text-violet-900" : "text-slate-800",
-                        ].join(" ")}
-                        onClick={() => {
-                          setPlacingSymbolType(def.id);
-                          setSymbolPaletteOpen(false);
-                          setRelationConnectMode(false);
-                          setRelationDraftSourceId(null);
-                        }}
-                      >
-                        {def.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {placingSymbolType ? (
-                <button
-                  type="button"
-                  className="mt-1 w-full rounded px-2 py-1 text-left text-[11px] text-slate-500 hover:bg-slate-50"
-                  onClick={() => setPlacingSymbolType(null)}
-                >
-                  Platzieren abbrechen
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-        {placingSymbolType ? (
-          <span className="rounded bg-violet-100 px-2 py-0.5 text-violet-900">
-            Klick auf Fläche: {listSymbolTypesByGroup("useCase").concat(listSymbolTypesByGroup("flowchart")).find((d) => d.id === placingSymbolType)?.label}
-          </span>
-        ) : null}
-        {selectedCanvasNodeIds.length > 1 && (
-          <span className="rounded bg-teal-100 px-2 py-0.5 text-teal-800">
-            {selectedCanvasNodeIds.length} Karten ausgewählt
-          </span>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 bg-white text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-            title="Bedienung anzeigen"
-            aria-label="Bedienung anzeigen"
-            onClick={() => setHelpOpen(true)}
-          >
-            ?
-          </button>
-        </div>
-      </div>
+      <CanvasToolbar
+        relationConnectMode={relationConnectMode}
+        onToggleConnect={() => {
+          const next = !relationConnectMode;
+          setRelationConnectMode(next);
+          if (!next) setRelationDraftSourceId(null);
+        }}
+        defaultRelationType={defaultRelationType}
+        onDefaultRelationTypeChange={setDefaultRelationType}
+        onFitAll={() => {
+          fitAllCardsInView();
+        }}
+        onResetView={() => setCanvasViewport({ ...DEFAULT_CANVAS_VIEWPORT })}
+        onExportPrompt={() => {
+          const prompt = exportCanvasAsPrompt(nodes, visibleRelations, {
+            contextTitle: contextNodeId
+              ? nodes.length > 0 ? `Canvas-Ansicht (${nodes.length} Karten)` : undefined
+              : "Board-Übersicht",
+          });
+          return navigator.clipboard.writeText(prompt);
+        }}
+        onExportPdf={() => {
+          void exportVisibleViewportPdf();
+        }}
+        onExportPng={() => {
+          void exportVisibleViewportImage("png");
+        }}
+        onExportSvg={() => {
+          void exportVisibleViewportImage("svg");
+        }}
+        onCopyDrawio={() => {
+          void copyCanvasToDrawio();
+        }}
+        pdfExporting={pdfExporting}
+        imageExporting={imageExporting}
+        drawioCopied={drawioCopied}
+        selectedCount={selectedCanvasNodeIds.length}
+        canDuplicate={Boolean(selectedCanvasNodeId) || selectedCanvasNodeIds.length > 0}
+        onAlign={(mode) => applyAlign(mode)}
+        onDuplicate={() => duplicateCanvasSelection()}
+        onAddGroup={() => {
+          const id = `grp-${Date.now().toString(36)}`;
+          addCanvasGroup({
+            id,
+            label: "Neue Gruppe",
+            x: 50,
+            y: 50,
+            width: 400,
+            height: 300,
+          });
+          setSelectedGroupId(id);
+        }}
+        placingSymbolType={placingSymbolType}
+        symbolPaletteOpen={symbolPaletteOpen}
+        onSymbolPaletteOpenChange={setSymbolPaletteOpen}
+        onPickSymbol={(type) => {
+          setPlacingSymbolType(type);
+          setSymbolPaletteOpen(false);
+          setRelationConnectMode(false);
+          setRelationDraftSourceId(null);
+        }}
+        onCancelPlacing={() => setPlacingSymbolType(null)}
+        onOpenHelp={() => setHelpOpen(true)}
+      />
 
       <div
         ref={setShellRef}
