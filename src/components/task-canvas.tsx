@@ -1101,6 +1101,17 @@ export function TaskCanvas({
                         >
                           ✎ Notiz bearbeiten
                         </button>
+                      ) : !symbol ? (
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                          onClick={() => {
+                            onOpenNoteEditor?.(contextMenu.nodeId!);
+                            setContextMenu(null);
+                          }}
+                        >
+                          ✎ Details bearbeiten
+                        </button>
                       ) : null}
                       {!symbol ? (
                         <button

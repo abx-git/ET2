@@ -52,9 +52,9 @@ function PresentationCardBlock({
         ) : null}
       </div>
       {description ? (
-        <p className="mt-3 max-w-prose whitespace-pre-wrap text-base leading-relaxed text-slate-600 sm:text-lg">
-          {description}
-        </p>
+        <div className="mt-3 max-w-prose text-base leading-relaxed text-slate-600 sm:text-lg [&_.note-markdown]:text-[15px] sm:[&_.note-markdown]:text-base">
+          <NoteMarkdownContent markdown={node.description} />
+        </div>
       ) : null}
     </section>
   );

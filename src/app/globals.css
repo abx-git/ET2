@@ -201,7 +201,7 @@ body {
 
 /*
  * MDXEditor hängt Select/Link-Popover in .mdxeditor-popup-container (z-index: 2).
- * Der Notiz-Dialog liegt bei z-index 1100 — ohne Anhebung liegen Dropdowns dahinter
+ * Notiz- und Kartendialog liegen bei z-index 1100 — ohne Anhebung liegen Dropdowns dahinter
  * (Blocktyp wirkt wie nur „Paragraph“, URL-Dialog verschwindet hinter dem Modal).
  */
 div.mdxeditor-popup-container {

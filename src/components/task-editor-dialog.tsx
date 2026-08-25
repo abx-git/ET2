@@ -1,9 +1,11 @@
 "use client";
 
+import type { MDXEditorMethods } from "@mdxeditor/editor";
 import { Check, Copy, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 
+import { NoteMarkdownEditor } from "@/components/note-markdown-editor";
 import { mergeCardFieldVisibility } from "@/lib/card-field-visibility";
 import { CARD_COLOR_OPTIONS, type CardColorId } from "@/lib/card-color";
 import { CARD_ICON_OPTIONS, type CardIconId } from "@/lib/card-icon";
@@ -24,6 +26,7 @@ import {
 import { formatTaskIdForDisplay, isLoxTaskId } from "@/lib/task-id";
 import { normalizeTaskCommand } from "@/lib/task-command";
 import { normalizeTaskLink } from "@/lib/task-link";
+import { normalizeNoteMarkdown } from "@/lib/tree-node-kind";
 import { findNodeById } from "@/lib/tree-utils";
 import {
   collectAllTagsFromForest,
@@ -71,6 +74,8 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
   const [link, setLink] = useState("");
   const [command, setCommand] = useState("");
   const [description, setDescription] = useState("");
+  const [descriptionSeed, setDescriptionSeed] = useState("");
+  const [descriptionEditorKey, setDescriptionEditorKey] = useState(0);
   const [tags, setTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState("");
   const [effort, setEffort] = useState(0);
@@ -82,24 +87,29 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
   const [cardIcon, setCardIcon] = useState<CardIconId | undefined>(undefined);
   const [idCopied, setIdCopied] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const descriptionEditorRef = useRef<MDXEditorMethods>(null);
 
   useEffect(() => {
-    if (!open || !node) return;
-    setTitle(node.title);
-    setLink(node.link);
-    setCommand(node.command ?? "");
-    setDescription(node.description);
-    setTags([...node.tags]);
+    if (!open || !nodeId) return;
+    const n = findNodeById(useTaskTreeStore.getState().roots, nodeId);
+    if (!n) return;
+    setTitle(n.title);
+    setLink(n.link);
+    setCommand(n.command ?? "");
+    setDescription(n.description);
+    setDescriptionSeed(n.description);
+    setDescriptionEditorKey((k) => k + 1);
+    setTags([...n.tags]);
     setTagDraft("");
-    setEffort(node.effort);
-    setEffortUnit(getEffortUnit(node));
-    setEffortSource(getEffortSource(node));
-    setDueDate(toInputDateTimeLocal(node.dueDate));
-    setReminderDate(toInputDateTimeLocal(node.reminderDate));
-    setCardColor(node.cardColor);
-    setCardIcon(node.cardIcon);
+    setEffort(n.effort);
+    setEffortUnit(getEffortUnit(n));
+    setEffortSource(getEffortSource(n));
+    setDueDate(toInputDateTimeLocal(n.dueDate));
+    setReminderDate(toInputDateTimeLocal(n.reminderDate));
+    setCardColor(n.cardColor);
+    setCardIcon(n.cardIcon);
     setIdCopied(false);
-  }, [open, node]);
+  }, [open, nodeId]);
 
   useEffect(() => {
     if (!open || !node || node.title.trim()) return;
@@ -199,7 +209,9 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
         title: title.trim(),
         link: normalizeTaskLink(link),
         command: normalizeTaskCommand(command),
-        description: description.trim(),
+        description: normalizeNoteMarkdown(
+          descriptionEditorRef.current?.getMarkdown() ?? description,
+        ).trim(),
         tags: uniqNonEmptyTags(tags),
         effort: nextEffort,
         effortUnit: nextUnit,
@@ -217,6 +229,7 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
   const handleFormKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
     if (e.key !== "Enter" || !e.shiftKey) return;
     if (e.target instanceof HTMLButtonElement) return;
+    if (e.target instanceof Element && e.target.closest(".note-mdx-editor")) return;
     e.preventDefault();
     saveFields({ addSiblingAfter: true });
   };
@@ -253,7 +266,12 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-editor-title"
-        className="flex max-h-[min(92dvh,40rem)] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/15 touch-manipulation sm:max-h-[min(88vh,40rem)] sm:rounded-2xl"
+        className={[
+          "flex w-full flex-col overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/15 touch-manipulation sm:rounded-2xl",
+          v.description
+            ? "max-h-[min(92dvh,48rem)] max-w-2xl sm:max-h-[min(88vh,48rem)]"
+            : "max-h-[min(92dvh,40rem)] max-w-md sm:max-h-[min(88vh,40rem)]",
+        ].join(" ")}
         onPointerDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -436,16 +454,25 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
 
             {v.description ? (
               <div>
-                <label htmlFor="task-desc" className={labelClass}>
-                  Beschreibung
-                </label>
-                <textarea
+                <div className="flex items-baseline justify-between gap-2">
+                  <label htmlFor="task-desc" className={labelClass}>
+                    Beschreibung
+                  </label>
+                  <span className="text-[10px] text-slate-400">WYSIWYG · Quelltext in der Toolbar</span>
+                </div>
+                <div
                   id="task-desc"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={2}
-                  className={`${fieldClass} resize-y`}
-                />
+                  className="note-mdx-editor mt-1 flex h-[16rem] flex-col overflow-hidden rounded-lg border border-slate-200 focus-within:border-sky-300 focus-within:ring-2 focus-within:ring-sky-500/25 sm:h-[18rem]"
+                >
+                  <NoteMarkdownEditor
+                    key={descriptionEditorKey}
+                    ref={descriptionEditorRef}
+                    markdown={descriptionSeed}
+                    onChange={(value) => setDescription(value)}
+                    contentEditableClassName="note-mdx-content min-h-[8rem] px-3 py-2 text-sm leading-relaxed text-slate-900 outline-none"
+                    placeholder="Beschreibung schreiben…"
+                  />
+                </div>
               </div>
             ) : null}
 

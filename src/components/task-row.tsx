@@ -26,6 +26,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { NoteMarkdownContent } from "@/components/note-markdown-content";
 import {
   aggregateNextDueOpen,
   aggregateOverdueDue,
@@ -543,9 +544,7 @@ export function TaskRow({
         {showMeta ? (
           <div className="mt-0.5 space-y-0.5">
             {descriptionText ? (
-              <p className="whitespace-pre-wrap break-words text-[11px] leading-snug text-slate-500">
-                {descriptionText}
-              </p>
+              <NoteMarkdownContent markdown={node.description} compact />
             ) : null}
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               {dueHint ? (

@@ -436,15 +436,22 @@ export function TaskDetailSidebar({
 
             {v.description ? (
               <div>
-                <label className={labelClass} htmlFor="et2-card-desc">
-                  Beschreibung
-                </label>
-                <textarea
-                  id="et2-card-desc"
-                  className={`${fieldClass} min-h-[4.5rem]`}
-                  value={node.description}
-                  onChange={(e) => updateCard(node.id, { description: e.target.value })}
-                />
+                <label className={labelClass}>Beschreibung</label>
+                <div className="mt-1 max-h-48 overflow-y-auto rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm">
+                  {node.description.trim() ? (
+                    <NoteMarkdownContent markdown={node.description} compact />
+                  ) : (
+                    <p className="text-xs italic text-slate-400">Keine Beschreibung</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-sky-200 bg-sky-50 px-2 py-1.5 text-xs font-medium text-sky-900 hover:bg-sky-100"
+                  onClick={() => onOpenNoteEditor?.(node.id)}
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  WYSIWYG-Editor öffnen
+                </button>
               </div>
             ) : null}
 

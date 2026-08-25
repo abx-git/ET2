@@ -509,20 +509,27 @@ export function TaskCanvasCard({
           </a>
         )}
 
-        {/* Description */}
+        {/* Description (Markdown) — Klick öffnet WYSIWYG-Popup */}
         {!note && fieldVisibility.description && node.description.trim() ? (
-          <div
-            data-card-scroll
-            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+          <button
+            type="button"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md text-left hover:bg-slate-50/80"
+            title={connecting ? "Als Verbindungsziel wählen" : "Beschreibung bearbeiten"}
             onPointerDown={(e) => {
+              if (connecting) return;
               e.stopPropagation();
-              onSelect(e.shiftKey);
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (connecting) {
+                onSelect(false);
+                return;
+              }
+              onOpenNote?.();
             }}
           >
-            <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-500">
-              {node.description}
-            </p>
-          </div>
+            <NoteMarkdownContent markdown={node.description} fillContainer />
+          </button>
         ) : null}
 
         {/* Note markdown — Klick öffnet WYSIWYG-Popup */}

@@ -27,6 +27,7 @@ export interface TaskNode {
   link: string;
   /** Shell-Befehl; wenn gesetzt, Terminal-Icon — Klick kopiert in die Zwischenablage. */
   command?: string;
+  /** Markdown-Beschreibung (WYSIWYG wie bei Notizen). */
   description: string;
   tags: string[];
   dueDate: Date | null;

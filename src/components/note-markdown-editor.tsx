@@ -13,7 +13,7 @@ const Editor = dynamic(() => import("./note-mdx-editor-initialized"), {
   ),
 });
 
-/** WYSIWYG-Markdown-Editor (MDXEditor) für Notizen — nur Client. */
+/** WYSIWYG-Markdown-Editor (MDXEditor) für Notizen und Kartenbeschreibungen — nur Client. */
 export const NoteMarkdownEditor = forwardRef<MDXEditorMethods, MDXEditorProps>(
   function NoteMarkdownEditor(props, ref) {
     return <Editor {...props} editorRef={ref} />;
