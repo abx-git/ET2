@@ -66,6 +66,17 @@ describe("working-file-write-fence", () => {
     if (!result.ok) expect(result.reason).toBe("empty_over_nonempty");
   });
 
+  it("refuses an empty board JSON over nonempty disk even with skipCas", () => {
+    const disk = nonemptyJson();
+    const result = assertSafeWorkingFileWrite({
+      outgoingJson: emptyishJson(),
+      diskJson: disk,
+      skipCas: true,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("empty_over_nonempty");
+  });
+
   it("refuses content CAS mismatch", () => {
     const disk = nonemptyJson("Disk");
     const outgoing = nonemptyJson("Editor");
