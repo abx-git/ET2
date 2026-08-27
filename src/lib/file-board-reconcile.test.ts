@@ -83,6 +83,42 @@ describe("planFileReconcile", () => {
   });
 });
 
+describe("applyBoardJsonToStoreInPlace", () => {
+  it("loads remote JSON without resetting drill context", async () => {
+    const { useTaskTreeStore } = await import("@/store/task-tree-store");
+    const { applyBoardJsonToStore, applyBoardJsonToStoreInPlace } = await import(
+      "./file-board-reconcile"
+    );
+
+    const parent = payloadWithRoot("Parent");
+    parent.roots[0]!.id = "parent-1";
+    parent.roots[0]!.children = [
+      {
+        id: "child-1",
+        title: "Child",
+        link: "",
+        description: "",
+        tags: [],
+        dueDate: null,
+        reminderDate: null,
+        effort: 0,
+        children: [],
+      },
+    ];
+    parent.pathIds = ["parent-1"];
+    applyBoardJsonToStore(jsonFromPayload(parent));
+    useTaskTreeStore.getState().setContextNodeId("parent-1");
+
+    const updated = payloadWithRoot("Parent remote");
+    updated.roots[0]!.id = "parent-1";
+    updated.roots[0]!.children = parent.roots[0]!.children;
+    updated.pathIds = [];
+    expect(applyBoardJsonToStoreInPlace(jsonFromPayload(updated))).toBe(true);
+    expect(useTaskTreeStore.getState().contextNodeId).toBe("parent-1");
+    expect(useTaskTreeStore.getState().roots[0]?.title).toBe("Parent remote");
+  });
+});
+
 describe("boardPersistKeyFromStoreState", () => {
   it("ignores focus-only UI state", async () => {
     const { useTaskTreeStore } = await import("@/store/task-tree-store");

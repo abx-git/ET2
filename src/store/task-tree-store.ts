@@ -128,6 +128,28 @@ export type BoardHistorySlice = {
 
 export type BoardViewMode = "list" | "canvas" | "presentation";
 
+export type BoardImportReplacePayload = {
+  roots: TaskNode[];
+  pathIds: string[];
+  collapsedIds?: string[];
+  cardCollapsedIds?: string[];
+  cardInteractionMode?: CardInteractionMode;
+  columnTitleOverrides: Record<number, string>;
+  hideCompletedTasks?: boolean;
+  completedTag?: string;
+  filterTags?: string[];
+  filterExcludeTags?: string[];
+  filterColors?: CardColorId[];
+  filterScheduleKinds?: ScheduleFilterKind[];
+  filterCombineMode?: FilterCombineMode;
+  cardFieldVisibility?: CardFieldVisibility;
+  effortOnTasksEnabled?: boolean;
+  noteAccentColor?: NoteAccentId;
+  clipboardRoots?: TaskNode[];
+  relations?: TaskRelation[];
+  appearance?: BoardAppearance;
+};
+
 function partializeBoardHistory(state: TaskTreeState): BoardHistorySlice {
   return {
     roots: state.roots,
@@ -410,27 +432,12 @@ export interface TaskTreeState {
   moveNodesToClipboard: (nodeIds: string[]) => void;
 
   /** Gesamten Board-Zustand aus Import ersetzen (Karten, Pfad, Ebenen-Namen, Einstellungen). */
-  replaceBoardFromImport: (payload: {
-    roots: TaskNode[];
-    pathIds: string[];
-    collapsedIds?: string[];
-    cardCollapsedIds?: string[];
-    cardInteractionMode?: CardInteractionMode;
-    columnTitleOverrides: Record<number, string>;
-    hideCompletedTasks?: boolean;
-    completedTag?: string;
-    filterTags?: string[];
-    filterExcludeTags?: string[];
-    filterColors?: CardColorId[];
-    filterScheduleKinds?: ScheduleFilterKind[];
-    filterCombineMode?: FilterCombineMode;
-    cardFieldVisibility?: CardFieldVisibility;
-    effortOnTasksEnabled?: boolean;
-    noteAccentColor?: NoteAccentId;
-    clipboardRoots?: TaskNode[];
-    relations?: TaskRelation[];
-    appearance?: BoardAppearance;
-  }) => void;
+  replaceBoardFromImport: (payload: BoardImportReplacePayload) => void;
+  /**
+   * Remote Arbeitsdatei in den laufenden Editor übernehmen:
+   * Board-Inhalt ersetzen, Drill/Viewport/Auswahl soweit möglich behalten.
+   */
+  patchBoardFromReplication: (payload: BoardImportReplacePayload) => void;
   /**
    * Teilbaum unter `parentId` einfügen (`null` = neue Wurzel am Ende).
    * IDs im `root` werden neu vergeben, um Kollisionen zu vermeiden.
@@ -519,6 +526,95 @@ function syncActiveContext(
     activePane,
     contextNodeId: contextByPane[activePane],
   };
+}
+
+function importedBoardContentFromPayload(payload: BoardImportReplacePayload): {
+  roots: TaskNode[];
+  pathIds: string[];
+  collapsedIds: string[];
+  cardCollapsedIds: string[];
+  cardInteractionMode: CardInteractionMode;
+  columnTitleOverrides: Record<number, string>;
+  hideCompletedTasks?: boolean;
+  completedTag?: string;
+  filterTags?: string[];
+  filterExcludeTags?: string[];
+  filterColors?: CardColorId[];
+  filterScheduleKinds?: ScheduleFilterKind[];
+  filterCombineMode?: FilterCombineMode;
+  cardFieldVisibility: CardFieldVisibility;
+  effortOnTasksEnabled?: boolean;
+  noteAccentColor?: NoteAccentId;
+  clipboardRoots: TaskNode[];
+  relations: TaskRelation[];
+  appearance: BoardAppearance;
+} {
+  const { roots } = payload;
+  const pathIds = normalizePathIds(roots, payload.pathIds);
+  const collapsedIds =
+    payload.collapsedIds !== undefined
+      ? (payload.collapsedIds ?? []).filter((x): x is string => typeof x === "string")
+      : defaultBoardCollapsedIds(roots);
+  const cardCollapsedIds =
+    payload.cardCollapsedIds !== undefined
+      ? (payload.cardCollapsedIds ?? []).filter((x): x is string => typeof x === "string")
+      : defaultBoardCollapsedIds(roots);
+  const cardInteractionMode: CardInteractionMode =
+    payload.cardInteractionMode === "navigate" || payload.cardInteractionMode === "expand"
+      ? payload.cardInteractionMode
+      : "expand";
+  return {
+    roots,
+    pathIds,
+    collapsedIds,
+    cardCollapsedIds,
+    cardInteractionMode,
+    columnTitleOverrides: payload.columnTitleOverrides,
+    ...(typeof payload.hideCompletedTasks === "boolean"
+      ? { hideCompletedTasks: payload.hideCompletedTasks }
+      : {}),
+    ...(typeof payload.completedTag === "string"
+      ? { completedTag: normalizeCompletedTag(payload.completedTag) }
+      : {}),
+    ...(payload.filterTags !== undefined
+      ? { filterTags: normalizeFilterTagList(payload.filterTags) }
+      : {}),
+    ...(payload.filterExcludeTags !== undefined
+      ? { filterExcludeTags: normalizeFilterTagList(payload.filterExcludeTags) }
+      : {}),
+    ...(payload.filterColors !== undefined
+      ? { filterColors: parseFilterColors(payload.filterColors) }
+      : {}),
+    ...(payload.filterScheduleKinds !== undefined
+      ? { filterScheduleKinds: parseScheduleFilterKinds(payload.filterScheduleKinds) }
+      : {}),
+    ...(payload.filterCombineMode !== undefined
+      ? { filterCombineMode: parseFilterCombineMode(payload.filterCombineMode) }
+      : {}),
+    cardFieldVisibility: mergeCardFieldVisibility(payload.cardFieldVisibility),
+    ...(typeof payload.effortOnTasksEnabled === "boolean"
+      ? { effortOnTasksEnabled: payload.effortOnTasksEnabled }
+      : {}),
+    ...(payload.noteAccentColor !== undefined
+      ? { noteAccentColor: parseNoteAccent(payload.noteAccentColor) }
+      : {}),
+    clipboardRoots: payload.clipboardRoots ?? [],
+    relations: sanitizeRelations(roots, payload.relations ?? []),
+    appearance: normalizeAppearance(payload.appearance ?? DEFAULT_APPEARANCE),
+  };
+}
+
+function preserveCanvasGroupsForRoots(
+  groups: Record<string, CanvasGroup[]>,
+  roots: TaskNode[],
+): Record<string, CanvasGroup[]> {
+  const next: Record<string, CanvasGroup[]> = {};
+  for (const [key, list] of Object.entries(groups)) {
+    if (key === "__root__" || findNodeById(roots, key)) {
+      next[key] = list;
+    }
+  }
+  return next;
 }
 
 function cleanupAfterSubtreeRemoved(
@@ -1544,78 +1640,50 @@ export const useTaskTreeStore = create<TaskTreeState>()(
   },
 
   replaceBoardFromImport: (payload) => {
-    const {
-      roots,
-      pathIds: incomingPath,
-      columnTitleOverrides,
-      hideCompletedTasks: incomingHideDone,
-      completedTag: incomingCompletedTag,
-      filterTags: incomingFilterTags,
-      filterExcludeTags: incomingFilterExcludeTags,
-      filterColors: incomingFilterColors,
-      filterScheduleKinds: incomingFilterSchedule,
-      filterCombineMode: incomingFilterCombine,
-      cardFieldVisibility: incomingVisibility,
-      effortOnTasksEnabled: incomingEffort,
-      noteAccentColor: incomingNoteAccent,
-    } = payload;
-    const pathIds = normalizePathIds(roots, incomingPath);
-    const hadCollapsedInPayload = payload.collapsedIds !== undefined;
-    const collapsedIds = hadCollapsedInPayload
-      ? (payload.collapsedIds ?? []).filter((x): x is string => typeof x === "string")
-      : defaultBoardCollapsedIds(roots);
-    const hadCardCollapsedInPayload = payload.cardCollapsedIds !== undefined;
-    const cardCollapsedIds = hadCardCollapsedInPayload
-      ? (payload.cardCollapsedIds ?? []).filter((x): x is string => typeof x === "string")
-      : defaultBoardCollapsedIds(roots);
-    const cardInteractionMode =
-      payload.cardInteractionMode === "navigate" || payload.cardInteractionMode === "expand"
-        ? payload.cardInteractionMode
-        : ("expand" as const);
+    const content = importedBoardContentFromPayload(payload);
     set({
-      roots,
-      pathIds,
-      collapsedIds,
-      cardCollapsedIds,
-      cardInteractionMode,
+      ...content,
       ...syncActiveContext({ ...DEFAULT_PANE_CONTEXTS }, "left"),
-      columnTitleOverrides,
-      ...(typeof incomingHideDone === "boolean" ? { hideCompletedTasks: incomingHideDone } : {}),
-      ...(typeof incomingCompletedTag === "string"
-        ? { completedTag: normalizeCompletedTag(incomingCompletedTag) }
-        : {}),
-      ...(incomingFilterTags !== undefined
-        ? {
-            filterTags: normalizeFilterTagList(incomingFilterTags),
-          }
-        : {}),
-      ...(incomingFilterExcludeTags !== undefined
-        ? {
-            filterExcludeTags: normalizeFilterTagList(incomingFilterExcludeTags),
-          }
-        : {}),
-      ...(incomingFilterColors !== undefined
-        ? { filterColors: parseFilterColors(incomingFilterColors) }
-        : {}),
-      ...(incomingFilterSchedule !== undefined
-        ? { filterScheduleKinds: parseScheduleFilterKinds(incomingFilterSchedule) }
-        : {}),
-      ...(incomingFilterCombine !== undefined
-        ? { filterCombineMode: parseFilterCombineMode(incomingFilterCombine) }
-        : {}),
-      cardFieldVisibility: mergeCardFieldVisibility(incomingVisibility),
-      ...(typeof incomingEffort === "boolean" ? { effortOnTasksEnabled: incomingEffort } : {}),
-      ...(incomingNoteAccent !== undefined
-        ? { noteAccentColor: parseNoteAccent(incomingNoteAccent) }
-        : {}),
-      clipboardRoots: payload.clipboardRoots ?? [],
-      relations: sanitizeRelations(roots, payload.relations ?? []),
-      appearance: normalizeAppearance(payload.appearance ?? DEFAULT_APPEARANCE),
       canvasGroups: {},
       selectedRelationId: null,
       selectedCanvasNodeId: null,
       selectedCanvasNodeIds: [] as string[],
       relationDraftSourceId: null,
+    });
+  },
+
+  patchBoardFromReplication: (payload) => {
+    set((s) => {
+      const content = importedBoardContentFromPayload(payload);
+      const { roots, relations } = content;
+      const currentPath = normalizePathIds(roots, s.pathIds);
+      const pathIds =
+        s.pathIds.length === 0 ? currentPath : currentPath.length > 0 ? currentPath : content.pathIds;
+      const contextByPane = normalizePaneContexts(roots, s.contextByPane);
+      const liveIds = collectAllNodeIds(roots);
+      const selectedCanvasNodeIds = s.selectedCanvasNodeIds.filter((id) => liveIds.has(id));
+      const selectedCanvasNodeId =
+        s.selectedCanvasNodeId && liveIds.has(s.selectedCanvasNodeId)
+          ? s.selectedCanvasNodeId
+          : (selectedCanvasNodeIds[0] ?? null);
+      const selectedRelationId =
+        s.selectedRelationId && relations.some((r) => r.id === s.selectedRelationId)
+          ? s.selectedRelationId
+          : null;
+      const relationDraftSourceId =
+        s.relationDraftSourceId && liveIds.has(s.relationDraftSourceId)
+          ? s.relationDraftSourceId
+          : null;
+      return {
+        ...content,
+        pathIds,
+        ...syncActiveContext(contextByPane, s.activePane),
+        canvasGroups: preserveCanvasGroupsForRoots(s.canvasGroups, roots),
+        selectedRelationId,
+        selectedCanvasNodeId,
+        selectedCanvasNodeIds,
+        relationDraftSourceId,
+      };
     });
   },
 

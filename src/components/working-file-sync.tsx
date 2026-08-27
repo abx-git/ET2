@@ -8,10 +8,12 @@ import {
 } from "@/components/file-conflict-dialog";
 import {
   applyBoardJsonToStore,
+  applyBoardJsonToStoreInPlace,
   boardJsonFromStoreState,
   boardPersistKeyFromStoreState,
-  boardStatesEquivalent,
 } from "@/lib/file-board-reconcile";
+import { classifyExternalWorkingFile } from "@/lib/working-file-external-sync";
+import { boardJsonHasContent } from "@/lib/working-file-write-fence";
 import {
   downloadWorkingFileSafetyCopy,
   EXTERNAL_WORKING_FILE_POLL_MS,
@@ -77,8 +79,8 @@ export interface WorkingFileSyncProps {
 
 /**
  * Autosave with content+mtime CAS.
- * External file edits: poll while visible and adopt disk into the editor.
- * If the editor was dirty, download an editor safety copy first — disk wins.
+ * External file edits: poll while visible, adopt disk in place when the editor is clean,
+ * and open a conflict dialog when both sides changed.
  */
 export function WorkingFileSync({
   onWorkingFileNameChange,
@@ -140,26 +142,31 @@ export function WorkingFileSync({
 
       setConflictBusy(true);
       suspendAutoPersistRef.current = true;
-      setConflictOpen(false);
+      let resolved = false;
 
       try {
         if (choice === "load_file" && handle) {
           const snap = await readWorkingFileSnapshot(handle);
           if (!snap) return;
-          setWorkingFilePersistPaused(false);
-          if (snap.text.trim()) {
-            const loaded = applyBoardJsonToStore(snap.text);
-            if (!loaded) {
-              window.alert(
-                "Die Arbeitsdatei konnte nicht gelesen werden (ungültiges JSON). Lokaler Stand bleibt erhalten.",
-              );
-              return;
-            }
+          if (!snap.text.trim()) {
+            window.alert(
+              "Die Arbeitsdatei ist leer (möglicherweise Sync). Lokaler Stand bleibt erhalten.",
+            );
+            return;
           }
+          const loaded = applyBoardJsonToStoreInPlace(snap.text);
+          if (!loaded) {
+            window.alert(
+              "Die Arbeitsdatei konnte nicht gelesen werden (ungültiges JSON). Lokaler Stand bleibt erhalten.",
+            );
+            return;
+          }
+          setWorkingFilePersistPaused(false);
           markWorkingFileSynced(snap.text, snap.lastModified);
           lastPersistKeyRef.current = boardPersistKeyFromStoreState();
           syncDirty();
           syncPaused();
+          resolved = true;
           return;
         }
 
@@ -171,8 +178,12 @@ export function WorkingFileSync({
         setWorkingFilePersistPaused(true, "external_conflict");
         syncPaused();
         syncDirty();
+        resolved = true;
       } finally {
-        conflictActiveRef.current = false;
+        if (resolved) {
+          conflictActiveRef.current = false;
+          setConflictOpen(false);
+        }
         suspendAutoPersistRef.current = false;
         setConflictBusy(false);
       }
@@ -221,25 +232,20 @@ export function WorkingFileSync({
           wroteOk = true;
           return true;
         }
-        if (
-          result.reason === "conflict" ||
-          result.reason === "content_cas_mismatch" ||
-          result.reason === "empty_over_nonempty" ||
-          result.reason === "unknown_disk_baseline"
-        ) {
-          // Retry once with CAS skipped — during rapid edits (drag), the conflict
-          // is almost always self-caused (our own previous write changed mtime).
-          const retryResult = await persistWorkingFileJson(boardJsonFromStoreState(), { skipCas: true });
-          if (retryResult.ok) {
-            lastPersistKeyRef.current = boardPersistKeyFromStoreState();
-            syncDirty();
-            wroteOk = true;
-            return true;
-          }
-          // If retry also fails, mark dirty but do NOT overwrite the editor state.
+        if (result.reason === "disk_unstable") {
           syncDirty();
           return false;
         }
+        if (result.reason === "conflict" || result.reason === "content_cas_mismatch") {
+          conflictActiveRef.current = true;
+          suspendAutoPersistRef.current = true;
+          setWorkingFilePersistPaused(true, "external_conflict");
+          if (mountedRef.current) setConflictOpen(true);
+          syncDirty();
+          syncPaused();
+          return false;
+        }
+        // Never skipCas-retry: that can overwrite a remote shared-folder revision.
         syncDirty();
         return false;
       } finally {
@@ -322,20 +328,37 @@ export function WorkingFileSync({
       if (!snap || !mountedRef.current) return;
 
       const localJson = boardJsonFromStoreState();
-      if (boardStatesEquivalent(snap.text, localJson)) {
+      const decision = classifyExternalWorkingFile({
+        diskJson: snap.text,
+        localJson,
+        editorDirty: isWorkingFileDirty(localJson),
+        lastSyncedHadContent: boardJsonHasContent(getLastSyncedBoardJson() ?? ""),
+      });
+
+      if (decision.action === "ignore") {
+        return;
+      }
+
+      if (decision.action === "mark_equivalent") {
         markWorkingFileSynced(snap.text, snap.lastModified);
         syncDirty();
         return;
       }
 
-      if (isWorkingFileDirty()) {
-        if (localJson.trim() && !boardStatesEquivalent(localJson, snap.text)) {
-          downloadWorkingFileSafetyCopy(localJson, "editor");
-        }
+      if (decision.action === "conflict") {
+        conflictActiveRef.current = true;
+        suspendAutoPersistRef.current = true;
+        setWorkingFilePersistPaused(true, "external_conflict");
+        setConflictOpen(true);
+        syncPaused();
+        syncDirty();
+        return;
       }
+
       suspendAutoPersistRef.current = true;
       try {
-        if (snap.text.trim()) applyBoardJsonToStore(snap.text);
+        const loaded = applyBoardJsonToStoreInPlace(snap.text);
+        if (!loaded) return;
         markWorkingFileSynced(snap.text, snap.lastModified);
         lastPersistKeyRef.current = boardPersistKeyFromStoreState();
       } finally {
