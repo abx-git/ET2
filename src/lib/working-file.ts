@@ -11,6 +11,10 @@ import {
   planFileReconcile,
 } from "@/lib/file-board-reconcile";
 import { boardImportPayloadFromExportText, downloadTextFile } from "@/lib/task-tree-json";
+import {
+  isSelfCausedDiskRevision,
+  isTransientUnstableWorkingFileJson,
+} from "@/lib/working-file-external-sync";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import {
   bindTabWorkingFile,
@@ -23,6 +27,7 @@ import { evaluateWorkingFileWriteGate, mayAutoRestoreWorkingFileFromStorage } fr
 import {
   assertSafeWorkingFileWrite,
   boardContentHash,
+  boardJsonHasContent,
 } from "@/lib/working-file-write-fence";
 import {
   ensureWorkingFileWriter,
@@ -160,7 +165,8 @@ export type WriteWorkingFileResult =
         | "persist_paused"
         | "empty_over_nonempty"
         | "content_cas_mismatch"
-        | "unknown_disk_baseline";
+        | "unknown_disk_baseline"
+        | "disk_unstable";
       message?: string;
       /** Disk snapshot when write was refused due to external change (caller may safety-download). */
       diskJson?: string;
@@ -282,6 +288,10 @@ export function markWorkingFileSynced(json: string, fileLastModified: number): v
   lastSyncedBoardJson = json;
   lastSyncedContentHash = boardContentHash(json);
   lastKnownFileModified = fileLastModified;
+}
+
+function lastSyncedWorkingFileHadContent(): boolean {
+  return lastSyncedBoardJson != null && boardJsonHasContent(lastSyncedBoardJson);
 }
 
 export function getLastSyncedContentHash(): string | null {
@@ -886,6 +896,18 @@ export async function writeWorkingFileJson(
     const before = await handle.getFile();
     const diskText = await before.text();
 
+    if (
+      !options?.skipCas &&
+      isTransientUnstableWorkingFileJson(diskText, lastSyncedWorkingFileHadContent())
+    ) {
+      return {
+        ok: false,
+        reason: "disk_unstable",
+        diskJson: diskText,
+        message: "Datei ist leer oder unvollständig (Sync) — Speichern wartet auf einen gültigen Stand.",
+      };
+    }
+
     const fence = assertSafeWorkingFileWrite({
       outgoingJson: json,
       diskJson: diskText,
@@ -911,15 +933,30 @@ export async function writeWorkingFileJson(
             ? lastKnownFileModified
             : undefined;
     if (expected !== undefined && before.lastModified !== expected) {
-      return { ok: false, reason: "conflict", diskJson: diskText, message: "Datei wurde extern geändert." };
+      const selfCaused = isSelfCausedDiskRevision(diskText, lastSyncedContentHash, json);
+      if (!selfCaused) {
+        return { ok: false, reason: "conflict", diskJson: diskText, message: "Datei wurde extern geändert." };
+      }
     }
-    // Without mtime baseline, content fence already ran; still refuse mtime-unknown + skipCas false
-    // if disk content hash diverges from synced (handled above).
+
+    // Cover the truncate window so a poll does not adopt an empty mid-write file.
+    suppressWorkingFileExternalPoll(OWN_WRITE_SUPPRESS_MS);
 
     const writable = await handle.createWritable({ keepExistingData: false });
     await writable.write(json);
     await writable.close();
     const file = await handle.getFile();
+    const writtenText = await file.text();
+    const outHash = boardContentHash(json);
+    const writtenHash = boardContentHash(writtenText);
+    if (outHash == null || writtenHash == null || writtenHash !== outHash) {
+      return {
+        ok: false,
+        reason: "io_error",
+        message: "Schreiben konnte nicht bestätigt werden — Datei nicht als gespeichert markiert.",
+        diskJson: writtenText,
+      };
+    }
     noteOwnWriteToWorkingFile(json, file.lastModified);
     return { ok: true, lastModified: file.lastModified };
   } catch (e) {
@@ -1434,6 +1471,17 @@ export async function persistWorkingFileJson(
   try {
     const existing = await idbGetMobileCopy(activeWorkingFileId, mobileWorkingFileName);
     const diskJson = existing?.json ?? "";
+    if (
+      !options?.skipCas &&
+      isTransientUnstableWorkingFileJson(diskJson, lastSyncedWorkingFileHadContent())
+    ) {
+      return {
+        ok: false,
+        reason: "disk_unstable",
+        diskJson,
+        message: "Kopie ist leer oder unvollständig — Speichern wartet auf einen gültigen Stand.",
+      };
+    }
     const fence = assertSafeWorkingFileWrite({
       outgoingJson: json,
       diskJson,
@@ -1454,7 +1502,9 @@ export async function persistWorkingFileJson(
         existing.sourceLastModified > 0 &&
         existing.sourceLastModified !== lastKnownFileModified
       ) {
-        return { ok: false, reason: "conflict", diskJson, message: "Mobile-Kopie wurde extern geändert." };
+        if (!isSelfCausedDiskRevision(diskJson, lastSyncedContentHash, json)) {
+          return { ok: false, reason: "conflict", diskJson, message: "Mobile-Kopie wurde extern geändert." };
+        }
       }
     }
     const sourceLastModified = Date.now();

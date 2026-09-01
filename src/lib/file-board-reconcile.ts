@@ -80,6 +80,24 @@ export function applyBoardJsonToStore(json: string): boolean {
   return true;
 }
 
+/** Adopt a remote Arbeitsdatei without resetting drill context / viewport / selection. */
+export function applyBoardPayloadToStoreInPlace(payload: BoardImportPayload): void {
+  runWithoutBoardHistory(() => {
+    useTaskTreeStore.getState().patchBoardFromReplication(payload);
+  });
+  if (payload.templates?.length) {
+    seedTemplatesFromBoard(payload.templates);
+    void mergeIncomingBoardTemplates(payload.templates);
+  }
+}
+
+export function applyBoardJsonToStoreInPlace(json: string): boolean {
+  const payload = payloadFromExportText(json);
+  if (!payload) return false;
+  applyBoardPayloadToStoreInPlace(payload);
+  return true;
+}
+
 export function boardJsonFromStoreState(): string {
   const s = useTaskTreeStore.getState();
   const templates = getTemplatesSnapshot();
