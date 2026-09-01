@@ -60,6 +60,11 @@ function luminance(hex: string): number {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 }
 
+/** Hell/dunkel der Listenansicht — gleiche Schwelle wie die abgeleiteten Listen-Tokens. */
+export function listSchemeFromAppearance(appearance: BoardAppearance): "light" | "dark" {
+  return luminance(appearance.canvas) > 0.55 ? "light" : "dark";
+}
+
 function rgba(hex: string, alpha: number): string {
   const { r, g, b } = hexToRgb(hex);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;

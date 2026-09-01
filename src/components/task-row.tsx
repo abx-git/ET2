@@ -34,10 +34,12 @@ import {
   isDueOverdue,
 } from "@/lib/aggregates";
 import type { CardFieldVisibility } from "@/lib/card-field-visibility";
+import { listSchemeFromAppearance } from "@/lib/board-appearance";
 import {
   CARD_COLOR_OPTIONS,
   cardColorAccentClass,
   cardColorClass,
+  cardColorCssVars,
   type CardColorId,
 } from "@/lib/card-color";
 import { CardIconBadge } from "@/components/card-icon-badge";
@@ -138,7 +140,9 @@ export function TaskRow({
 }: TaskRowProps) {
   const completedTag = useTaskTreeStore((s) => s.completedTag);
   const effortOnTasksEnabled = useTaskTreeStore((s) => s.effortOnTasksEnabled);
+  const appearance = useTaskTreeStore((s) => s.appearance);
   const updateCard = useTaskTreeStore((s) => s.updateCard);
+  const listScheme = listSchemeFromAppearance(appearance);
   const headingId = useId();
   const titleInputRef = useRef<HTMLInputElement>(null);
   const titleEditStartedAtRef = useRef(0);
@@ -262,6 +266,7 @@ export function TaskRow({
       ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
       : {}),
     ...(nestDepth > 0 ? { marginLeft: `${nestDepth * 0.75}rem` } : {}),
+    ...cardColorCssVars(node.cardColor, listScheme),
   };
 
   const commitTitle = (meta?: TaskTitleSaveMeta) => {
@@ -308,7 +313,7 @@ export function TaskRow({
   };
 
   const surface =
-    cardColorClass(node.cardColor) ??
+    cardColorClass(node.cardColor, listScheme) ??
     (nestDepth > 0
       ? "border-[var(--list-border)] bg-[var(--list-card-nested)]"
       : "border-[var(--list-border)] bg-[var(--list-card)]");

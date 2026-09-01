@@ -4,13 +4,17 @@ import {
   APPEARANCE_PRESETS,
   appearanceToCssVars,
   DEFAULT_APPEARANCE,
+  listSchemeFromAppearance,
 } from "@/lib/board-appearance";
+import { cardColorCssVars } from "@/lib/card-color";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 
 export function AppearanceSettings() {
   const appearance = useTaskTreeStore((s) => s.appearance);
   const setAppearance = useTaskTreeStore((s) => s.setAppearance);
   const vars = appearanceToCssVars(appearance);
+  const listScheme = listSchemeFromAppearance(appearance);
+  const roseInk = cardColorCssVars("rose", listScheme)!;
 
   return (
     <div className="space-y-4">
@@ -60,6 +64,18 @@ export function AppearanceSettings() {
             }}
           >
             Unterkarte · Umrandung
+          </div>
+          <div
+            className={[
+              "rounded-md border px-2.5 py-1.5 text-xs font-medium",
+              listScheme === "dark" ? "bg-rose-950 border-rose-400/40" : "bg-rose-100 border-rose-300/80",
+            ].join(" ")}
+            style={{
+              color: roseInk["--list-text"],
+              borderColor: roseInk["--list-border"],
+            }}
+          >
+            Rote Karte
           </div>
         </div>
       </div>
