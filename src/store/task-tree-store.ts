@@ -49,6 +49,11 @@ import {
 } from "@/lib/tree-depth-collapse";
 import type { CardInteractionMode } from "@/lib/card-expand";
 import {
+  isCardVisibleInListContext,
+  moveCardWithKeyboard as applyKeyboardCardMove,
+  type CardNavDirection,
+} from "@/lib/card-keyboard-nav";
+import {
   defaultColorForNewCard,
   parseFilterColors,
   parseFilterCombineMode,
@@ -305,6 +310,9 @@ export interface TaskTreeState {
 
   /** DnD innerhalb der Kontext-Liste (Reorder / Nest). */
   applyContextListDrag: (activeId: string, drop: ContextListDrop) => void;
+
+  /** Karte per Shift+Pfeil in der Listen-Ansicht umsortieren / einrücken. */
+  moveCardWithKeyboard: (nodeId: string, direction: CardNavDirection) => boolean;
 
   /** DnD in der Struktur-Leiste (gesamter Baum). */
   applyOutlineDrag: (activeId: string, drop: OutlineDrop) => void;
@@ -988,6 +996,33 @@ export const useTaskTreeStore = create<TaskTreeState>()(
         ...syncActiveContext(contextByPane, s.activePane),
       };
     });
+  },
+
+  moveCardWithKeyboard: (nodeId, direction) => {
+    const current = get();
+    const moved = applyKeyboardCardMove(current.roots, nodeId, direction);
+    if (!moved) return false;
+    const nextRoots = refreshCalculatedEffortsInTree(moved.roots, current.completedTag);
+    const path = pathFromRootToNode(nextRoots, nodeId);
+    const open = new Set(path ?? []);
+    const nextCollapsed = current.collapsedIds.filter((id) => !open.has(id));
+    const nextCardCollapsed = current.cardCollapsedIds.filter((id) => !open.has(id));
+    const navigateSiblingsOnly =
+      !current.lightModeEnabled && current.cardInteractionMode === "navigate";
+    let contextByPane = normalizePaneContexts(nextRoots, current.contextByPane);
+    const activeContext = contextByPane[current.activePane];
+    if (!isCardVisibleInListContext(nextRoots, nodeId, activeContext, navigateSiblingsOnly)) {
+      contextByPane = { ...contextByPane, [current.activePane]: moved.parentId };
+    }
+    set({
+      roots: nextRoots,
+      pathIds: pathIdsAfterNodeMove(nextRoots, nodeId, current.pathIds),
+      collapsedIds: nextCollapsed,
+      cardCollapsedIds: nextCardCollapsed,
+      relations: sanitizeRelations(nextRoots, current.relations),
+      ...syncActiveContext(contextByPane, current.activePane),
+    });
+    return true;
   },
 
   applyOutlineDrag: (activeId, drop) => {

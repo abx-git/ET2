@@ -160,3 +160,45 @@ describe("board undo/redo", () => {
     expect(parent.children[0]!.children[0]!.title).toBe("Kontakt");
   });
 });
+
+describe("moveCardWithKeyboard", () => {
+  beforeEach(() => {
+    runWithoutBoardHistory(() => {
+      useTaskTreeStore.getState().replaceBoardFromImport({
+        roots: [],
+        pathIds: [],
+        collapsedIds: [],
+        columnTitleOverrides: {},
+        clipboardRoots: [],
+      });
+    });
+  });
+
+  it("sorts siblings and is undoable", () => {
+    const a = useTaskTreeStore.getState().addCardAfter(null);
+    const b = useTaskTreeStore.getState().addCardAfter(null);
+    useTaskTreeStore.getState().updateCard(a, { title: "A" });
+    useTaskTreeStore.getState().updateCard(b, { title: "B" });
+    clearBoardHistory();
+
+    expect(useTaskTreeStore.getState().moveCardWithKeyboard(b, "up")).toBe(true);
+    expect(useTaskTreeStore.getState().roots.map((n) => n.title)).toEqual(["B", "A"]);
+
+    undoBoard();
+    expect(useTaskTreeStore.getState().roots.map((n) => n.title)).toEqual(["A", "B"]);
+  });
+
+  it("nests under the previous sibling and outdents after the parent", () => {
+    const a = useTaskTreeStore.getState().addCardAfter(null);
+    const b = useTaskTreeStore.getState().addCardAfter(null);
+    useTaskTreeStore.getState().updateCard(a, { title: "A" });
+    useTaskTreeStore.getState().updateCard(b, { title: "B" });
+
+    expect(useTaskTreeStore.getState().moveCardWithKeyboard(b, "right")).toBe(true);
+    expect(useTaskTreeStore.getState().roots.map((n) => n.title)).toEqual(["A"]);
+    expect(useTaskTreeStore.getState().roots[0]?.children.map((n) => n.title)).toEqual(["B"]);
+
+    expect(useTaskTreeStore.getState().moveCardWithKeyboard(b, "left")).toBe(true);
+    expect(useTaskTreeStore.getState().roots.map((n) => n.title)).toEqual(["A", "B"]);
+  });
+});

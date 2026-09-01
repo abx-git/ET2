@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   firstContextCardId,
   focusTargetAfterRemoving,
+  isCardVisibleInListContext,
+  moveCardWithKeyboard,
   navigateContextCard,
   navigateExpandedCard,
   navigateOutlineTree,
@@ -117,5 +119,65 @@ describe("focusTargetAfterRemoving", () => {
 
   it("fällt auf Parent zurück ohne Geschwister", () => {
     expect(focusTargetAfterRemoving([node("a", "A", [node("b", "B")])], "b")).toBe("a");
+  });
+});
+
+describe("moveCardWithKeyboard", () => {
+  it("tauscht Geschwister nach oben und unten", () => {
+    const roots = [node("a", "A"), node("b", "B"), node("c", "C")];
+    expect(moveCardWithKeyboard(roots, "b", "up")?.roots.map((n) => n.id)).toEqual(["b", "a", "c"]);
+    expect(moveCardWithKeyboard(roots, "b", "down")?.roots.map((n) => n.id)).toEqual(["a", "c", "b"]);
+  });
+
+  it("ändert nichts am Anfang/Ende der Ebene", () => {
+    const roots = [node("a", "A"), node("b", "B")];
+    expect(moveCardWithKeyboard(roots, "a", "up")).toBeNull();
+    expect(moveCardWithKeyboard(roots, "b", "down")).toBeNull();
+    expect(moveCardWithKeyboard(roots, "a", "right")).toBeNull();
+    expect(moveCardWithKeyboard(roots, "a", "left")).toBeNull();
+  });
+
+  it("tauscht auch verschachtelte Geschwister", () => {
+    const roots = [node("p", "P", [node("a", "A"), node("b", "B"), node("c", "C")])];
+    expect(moveCardWithKeyboard(roots, "c", "up")?.roots[0]?.children.map((n) => n.id)).toEqual([
+      "a",
+      "c",
+      "b",
+    ]);
+  });
+
+  it("hebt eine Ebene an und setzt die Karte direkt hinter den Parent", () => {
+    const roots = [
+      node("p", "P", [node("a", "A"), node("b", "B", [node("b1", "B1")]), node("c", "C")]),
+      node("q", "Q"),
+    ];
+    const moved = moveCardWithKeyboard(roots, "b", "left");
+    expect(moved?.parentId).toBeNull();
+    expect(moved?.roots.map((n) => n.id)).toEqual(["p", "b", "q"]);
+    expect(moved?.roots[0]?.children.map((n) => n.id)).toEqual(["a", "c"]);
+    expect(moved?.roots[1]?.children.map((n) => n.id)).toEqual(["b1"]);
+  });
+
+  it("senkt eine Ebene unter das vorherige Geschwister (ans Ende der Kinder)", () => {
+    const roots = [node("a", "A", [node("a1", "A1")]), node("b", "B"), node("c", "C")];
+    const moved = moveCardWithKeyboard(roots, "b", "right");
+    expect(moved?.parentId).toBe("a");
+    expect(moved?.roots.map((n) => n.id)).toEqual(["a", "c"]);
+    expect(moved?.roots[0]?.children.map((n) => n.id)).toEqual(["a1", "b"]);
+  });
+});
+
+describe("isCardVisibleInListContext", () => {
+  const roots = [node("a", "A", [node("a1", "A1"), node("a2", "A2")])];
+
+  it("prüft in Navigate nur die Geschwister der Ebene", () => {
+    expect(isCardVisibleInListContext(roots, "a1", "a", true)).toBe(true);
+    expect(isCardVisibleInListContext(roots, "a1", null, true)).toBe(false);
+  });
+
+  it("prüft in Expand den ganzen Unterbaum des Kontexts", () => {
+    expect(isCardVisibleInListContext(roots, "a1", "a", false)).toBe(true);
+    expect(isCardVisibleInListContext(roots, "a1", null, false)).toBe(true);
+    expect(isCardVisibleInListContext(roots, "a2", "a1", false)).toBe(false);
   });
 });

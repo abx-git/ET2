@@ -1,5 +1,12 @@
 import type { VisibleCardEntry } from "@/lib/card-expand";
-import { findDirectParentId, findNodeById, getSiblingsList } from "@/lib/tree-utils";
+import {
+  detachNodeById,
+  findDirectParentId,
+  findNodeById,
+  getSiblingsList,
+  insertUnderParent,
+  subtreeContainsId,
+} from "@/lib/tree-utils";
 import type { TaskNode } from "@/types/task-node";
 
 export type CardNavDirection = "up" | "down" | "left" | "right";
@@ -127,4 +134,89 @@ export function focusTargetAfterRemoving(
   const siblings = getSiblingsList(roots, parentResult).filter((s) => s.id !== removedId);
   if (siblings.length > 0) return siblings[0].id;
   return parentResult;
+}
+
+export type KeyboardCardMove = {
+  roots: TaskNode[];
+  /** Neuer direkter Parent nach dem Verschieben (`null` = Wurzel). */
+  parentId: string | null;
+};
+
+/**
+ * Listen-Sortierung per Tastatur:
+ * - up/down: unter denselben Geschwistern tauschen
+ * - left: eine Ebene höher, direkt hinter die bisherige Elternkarte
+ * - right: eine Ebene tiefer, als letztes Kind der Karte direkt darüber (vorheriges Geschwister)
+ */
+export function moveCardWithKeyboard(
+  roots: TaskNode[],
+  nodeId: string,
+  direction: CardNavDirection,
+): KeyboardCardMove | null {
+  const parentId = findDirectParentId(roots, nodeId);
+  if (parentId === undefined) return null;
+
+  const siblings = getSiblingsList(roots, parentId);
+  const idx = siblings.findIndex((n) => n.id === nodeId);
+  if (idx < 0) return null;
+
+  if (direction === "up") {
+    if (idx === 0) return null;
+    return relocateNode(roots, nodeId, parentId, idx - 1, parentId);
+  }
+
+  if (direction === "down") {
+    if (idx >= siblings.length - 1) return null;
+    // Nach dem Detach sitzt das nächste Geschwister auf `idx`; einfügen dahinter.
+    return relocateNode(roots, nodeId, parentId, idx + 1, parentId);
+  }
+
+  if (direction === "left") {
+    if (parentId === null) return null;
+    const grandparentId = findDirectParentId(roots, parentId);
+    if (grandparentId === undefined) return null;
+    const parentSiblings = getSiblingsList(roots, grandparentId);
+    const parentIdx = parentSiblings.findIndex((n) => n.id === parentId);
+    if (parentIdx < 0) return null;
+    return relocateNode(roots, nodeId, grandparentId, parentIdx + 1, grandparentId);
+  }
+
+  if (idx === 0) return null;
+  const prev = siblings[idx - 1];
+  if (!prev) return null;
+  return relocateNode(roots, nodeId, prev.id, prev.children.length, prev.id);
+}
+
+function relocateNode(
+  roots: TaskNode[],
+  nodeId: string,
+  insertParentId: string | null,
+  insertIndex: number,
+  resultParentId: string | null,
+): KeyboardCardMove | null {
+  const { next, detached } = detachNodeById(roots, nodeId);
+  if (!detached) return null;
+  return {
+    roots: insertUnderParent(next, insertParentId, insertIndex, detached),
+    parentId: resultParentId,
+  };
+}
+
+/**
+ * Ob die verschobene Karte in der aktuellen Listen-Ansicht noch sichtbar wäre.
+ * Navigate zeigt nur Geschwister der Kontext-Ebene, Expand/Light den ganzen Unterbaum.
+ */
+export function isCardVisibleInListContext(
+  roots: TaskNode[],
+  nodeId: string,
+  contextNodeId: string | null,
+  navigateSiblingsOnly: boolean,
+): boolean {
+  if (navigateSiblingsOnly) {
+    return getSiblingsList(roots, contextNodeId).some((n) => n.id === nodeId);
+  }
+  if (contextNodeId === null) return findNodeById(roots, nodeId) !== null;
+  const ctx = findNodeById(roots, contextNodeId);
+  if (!ctx) return false;
+  return subtreeContainsId(ctx, nodeId);
 }

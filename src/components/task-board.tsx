@@ -242,6 +242,7 @@ export function TaskBoard() {
   const drillIntoNode = useTaskTreeStore((s) => s.drillIntoNode);
   const drillUp = useTaskTreeStore((s) => s.drillUp);
   const applyContextListDrag = useTaskTreeStore((s) => s.applyContextListDrag);
+  const moveCardWithKeyboard = useTaskTreeStore((s) => s.moveCardWithKeyboard);
   const applyOutlineDrag = useTaskTreeStore((s) => s.applyOutlineDrag);
   const applyUnifiedDrag = useTaskTreeStore((s) => s.applyUnifiedDrag);
   const clearClipboard = useTaskTreeStore((s) => s.clearClipboard);
@@ -1306,6 +1307,25 @@ export function TaskBoard() {
               : e.key === "ArrowLeft"
                 ? "left"
                 : "right";
+        if (
+          e.shiftKey &&
+          !e.metaKey &&
+          !e.ctrlKey &&
+          !e.altKey &&
+          (lightModeEnabled || boardViewMode === "list")
+        ) {
+          const moveId = keyboardFocusNodeId;
+          if (moveId && moveCardWithKeyboard(moveId, direction)) {
+            setKeyboardFocusNodeId(moveId);
+            setSearchFocusNodeId(null);
+            setScrollToNodeId(moveId);
+          } else if (currentId) {
+            setKeyboardFocusNodeId(currentId);
+            setSearchFocusNodeId(null);
+            setScrollToNodeId(currentId);
+          }
+          return;
+        }
 
         const nav = lightModeEnabled
           ? navigateOutlineTree(outlineVisibleCards, collapsedSet, currentId, direction)
@@ -1438,6 +1458,8 @@ export function TaskBoard() {
     cardCollapsedSet,
     cardInteractionMode,
     lightModeEnabled,
+    boardViewMode,
+    moveCardWithKeyboard,
     contextNodeId,
     drillUp,
     drillIntoNode,
