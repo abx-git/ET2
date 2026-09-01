@@ -65,11 +65,11 @@ import type { TaskNode } from "@/types/task-node";
 export type TaskTitleSaveMeta = { addSiblingAfter?: boolean };
 
 const rowMenuItemClass =
-  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50";
+  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-[var(--list-text)] hover:bg-[var(--list-hover)]";
 const rowMenuItemDangerClass =
-  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-red-700 hover:bg-red-50";
+  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-red-600 hover:bg-red-500/10";
 const rowMenuPanelClass =
-  "fixed z-[80] min-w-[11rem] rounded-md border border-slate-200 bg-white py-0.5 shadow-lg ring-1 ring-slate-900/5";
+  "fixed z-[80] min-w-[11rem] rounded-md border border-[var(--list-border)] bg-[var(--list-card)] py-0.5 shadow-lg";
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
   if (!target) return false;
@@ -308,7 +308,10 @@ export function TaskRow({
   };
 
   const surface =
-    cardColorClass(node.cardColor) ?? "border-slate-200/90 bg-white";
+    cardColorClass(node.cardColor) ??
+    (nestDepth > 0
+      ? "border-[var(--list-border)] bg-[var(--list-card-nested)]"
+      : "border-[var(--list-border)] bg-[var(--list-card)]");
   const accent = cardColorAccentClass(node.cardColor);
 
   const menu =
@@ -324,7 +327,7 @@ export function TaskRow({
             type="button"
             role="menuitemradio"
             aria-checked={!node.cardColor}
-            className="flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-[8px]"
+            className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--list-border)] text-[8px] text-[var(--list-muted)]"
             onClick={() => setCardColor(undefined)}
           >
             —
@@ -341,7 +344,7 @@ export function TaskRow({
             />
           ))}
         </div>
-        <div className="my-0.5 border-t border-slate-100" />
+        <div className="my-0.5 border-t border-[var(--list-border)]" />
         <button
           type="button"
           role="menuitem"
@@ -462,15 +465,14 @@ export function TaskRow({
       }}
       onContextMenu={handleContextMenu}
       className={[
-        "group relative flex touch-none cursor-grab items-stretch gap-1 rounded-lg border px-2 py-2 shadow-sm transition active:cursor-grabbing",
-        nestDepth > 0 ? "border-slate-200/70 bg-white/90" : "",
+        "group relative flex touch-none cursor-grab items-stretch gap-1 rounded-lg border px-2 py-2 shadow-[var(--list-shadow)] transition active:cursor-grabbing",
         surface,
         isDragging ? "opacity-40" : "",
         isNestDropTarget || isOver
-          ? "border-violet-400 bg-violet-50/90 ring-2 ring-violet-300/70"
+          ? "border-[var(--list-drop-border)] bg-[var(--list-drop)] ring-2 ring-[var(--list-drop-border)]"
           : "",
         isSearchFocus ? "ring-2 ring-amber-300/90" : "",
-        isKeyboardFocus && !isSearchFocus ? "ring-2 ring-sky-300/90" : "",
+        isKeyboardFocus && !isSearchFocus ? "ring-2 ring-[var(--list-focus)]" : "",
         isDueOverdue(rollupOverdue ?? null, done) ? "border-red-300/80" : "",
       ].join(" ")}
     >
@@ -481,7 +483,7 @@ export function TaskRow({
       {fieldVisibility.completedCheck ? (
         <button
           type="button"
-          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-700"
+          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--list-muted)] hover:bg-[var(--list-hover)] hover:text-[var(--list-text)]"
           aria-label={done ? "Als offen markieren" : "Als erledigt markieren"}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -518,7 +520,7 @@ export function TaskRow({
             }}
             onPointerDown={(e) => e.stopPropagation()}
             autoFocus
-            className="w-full rounded border border-sky-300 bg-white px-2 py-1 text-sm text-slate-900 outline-none ring-2 ring-sky-200"
+            className="w-full rounded border border-[var(--list-focus)] bg-[var(--list-card)] px-2 py-1 text-sm text-[var(--list-text)] outline-none ring-2 ring-[var(--list-ring)]"
             aria-label="Titel"
           />
         ) : (
@@ -527,8 +529,8 @@ export function TaskRow({
             <button
               type="button"
               className={[
-                "max-w-full w-fit cursor-text truncate rounded-sm text-left text-sm font-medium hover:underline decoration-slate-300 underline-offset-2",
-                done ? "text-slate-400 line-through" : "text-slate-900",
+                "max-w-full w-fit cursor-text truncate rounded-sm text-left text-sm font-medium hover:underline decoration-[var(--list-muted)] underline-offset-2",
+                done ? "text-[var(--list-muted)] line-through" : "text-[var(--list-text)]",
               ].join(" ")}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
@@ -551,7 +553,7 @@ export function TaskRow({
                 <span
                   className={[
                     "text-[10px]",
-                    isDueOverdue(rollupOverdue ?? null, done) ? "font-medium text-red-600" : "text-slate-500",
+                    isDueOverdue(rollupOverdue ?? null, done) ? "font-medium text-red-600" : "text-[var(--list-muted)]",
                   ].join(" ")}
                   title="Fälligkeit"
                 >
@@ -564,12 +566,12 @@ export function TaskRow({
                 </span>
               ) : null}
               {effortLabel ? (
-                <span className="text-[10px] tabular-nums text-slate-500" title="Aufwand">
+                <span className="text-[10px] tabular-nums text-[var(--list-muted)]" title="Aufwand">
                   Σ {effortLabel}
                 </span>
               ) : null}
               {idLabel ? (
-                <span className="font-mono text-[10px] text-slate-400" title="Karten-ID">
+                <span className="font-mono text-[10px] text-[var(--list-muted)] opacity-80" title="Karten-ID">
                   {idLabel}
                 </span>
               ) : null}
@@ -618,7 +620,7 @@ export function TaskRow({
       >
         <button
           type="button"
-          className="flex h-7 w-7 items-center justify-center rounded-md border border-sky-200/90 bg-sky-50 text-sky-700 hover:bg-sky-100"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--list-focus)] bg-[var(--list-add-bg)] text-[var(--list-add-text)] hover:opacity-90"
           title="Unterkarte"
           aria-label="Unterkarte anlegen"
           onClick={(e) => {
@@ -631,7 +633,7 @@ export function TaskRow({
         {hasChildren ? (
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="list-icon-btn"
             title={expandMode ? (isCollapsed ? "Aufklappen" : "Zuklappen") : "Hinein"}
             aria-label={
               expandMode
@@ -659,7 +661,7 @@ export function TaskRow({
         <div ref={menuRef}>
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+            className="list-icon-btn"
             aria-label="Aktionen"
             onClick={(e) => {
               e.stopPropagation();

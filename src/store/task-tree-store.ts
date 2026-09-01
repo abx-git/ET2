@@ -346,7 +346,7 @@ export interface TaskTreeState {
   clearClipboard: () => void;
 
 
-  /** Farbschema (Canvas + Seitenleisten), wie E2. */
+  /** Farbschema (Liste, Canvas, Seitenleisten). */
   appearance: BoardAppearance;
   setAppearance: (patch: Partial<BoardAppearance>) => void;
 
@@ -1099,10 +1099,6 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     const moved = applyKeyboardCardMove(current.roots, nodeId, direction);
     if (!moved) return false;
     const nextRoots = refreshCalculatedEffortsInTree(moved.roots, current.completedTag);
-    const path = pathFromRootToNode(nextRoots, nodeId);
-    const open = new Set(path ?? []);
-    const nextCollapsed = current.collapsedIds.filter((id) => !open.has(id));
-    const nextCardCollapsed = current.cardCollapsedIds.filter((id) => !open.has(id));
     const navigateSiblingsOnly =
       !current.lightModeEnabled && current.cardInteractionMode === "navigate";
     let contextByPane = normalizePaneContexts(nextRoots, current.contextByPane);
@@ -1113,8 +1109,6 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     set({
       roots: nextRoots,
       pathIds: pathIdsAfterNodeMove(nextRoots, nodeId, current.pathIds),
-      collapsedIds: nextCollapsed,
-      cardCollapsedIds: nextCardCollapsed,
       relations: sanitizeRelations(nextRoots, current.relations),
       ...syncActiveContext(contextByPane, current.activePane),
     });

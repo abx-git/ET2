@@ -41,22 +41,22 @@ function GapDrop({
         "mx-1 rounded transition-all",
         large
           ? isOver
-            ? "min-h-28 border border-dashed border-sky-400 bg-sky-50/90 px-4 py-8"
-            : "min-h-28 border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8"
+            ? "min-h-28 border border-dashed border-[var(--list-drop-border)] bg-[var(--list-drop)] px-4 py-8"
+            : "min-h-28 border border-dashed border-[var(--list-border)] bg-[var(--list-card-nested)] px-4 py-8"
           : isOver
-            ? "h-4 bg-sky-200/90 ring-1 ring-sky-400"
+            ? "h-4 bg-[var(--list-drop)] ring-1 ring-[var(--list-drop-border)]"
             : "h-2.5",
       ].join(" ")}
       aria-hidden={!emptyHint}
     >
       {emptyHint ? (
-        <p className="pointer-events-none text-center text-sm text-slate-500">
+        <p className="pointer-events-none text-center text-sm text-[var(--list-muted)]">
           Keine Einträge hier.{" "}
-          <kbd className="rounded border px-1 text-[11px]">Enter</kbd> /{" "}
-          <kbd className="rounded border px-1 text-[11px]">Tab</kbd> für Karten,{" "}
-          <kbd className="rounded border px-1 text-[11px]">Shift+Enter</kbd> /{" "}
-          <kbd className="rounded border px-1 text-[11px]">Shift+Tab</kbd> für Notizen.
-          <span className="mt-2 block text-xs text-slate-400">
+          <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">Enter</kbd> /{" "}
+          <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">Tab</kbd> für Karten,{" "}
+          <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">Shift+Enter</kbd> /{" "}
+          <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">Shift+Tab</kbd> für Notizen.
+          <span className="mt-2 block text-xs text-[var(--list-muted)] opacity-80">
             Oder Karte aus der Zwischenablage hierher ziehen.
           </span>
         </p>
@@ -220,7 +220,7 @@ function NestedCardBranch({
               {...shared}
             />
             {kids.length > 0 ? (
-              <div className="mt-0.5 border-l border-slate-200/80 ml-3 pl-1">
+              <div className="mt-0.5 ml-3 border-l border-[var(--list-border)] pl-1">
                 <NestedCardBranch
                   nodes={kids}
                   listParentId={node.id}
@@ -340,9 +340,9 @@ export function ContextCardList({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h2 className="text-sm font-semibold text-slate-800">{contextLabel}</h2>
+          <h2 className="text-sm font-semibold text-[var(--list-text)]">{contextLabel}</h2>
           <div
-            className="flex items-center gap-0.5 rounded-lg border border-slate-200/90 bg-slate-50/80 p-0.5"
+            className="flex items-center gap-0.5 rounded-lg border border-[var(--list-border)] bg-[var(--list-card-nested)] p-0.5"
             role="group"
             aria-label="Karten-Interaktion"
           >
@@ -352,8 +352,8 @@ export function ContextCardList({
               className={[
                 "rounded-md px-2 py-1 text-[11px] font-medium transition",
                 interactionMode === "expand"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:text-slate-900",
+                  ? "bg-[var(--list-card)] text-[var(--list-text)] shadow-sm"
+                  : "text-[var(--list-muted)] hover:text-[var(--list-text)]",
               ].join(" ")}
               aria-pressed={interactionMode === "expand"}
               title="Doppelklick und Icon klappen Äste auf — mehrere gleichzeitig sichtbar"
@@ -366,8 +366,8 @@ export function ContextCardList({
               className={[
                 "rounded-md px-2 py-1 text-[11px] font-medium transition",
                 interactionMode === "navigate"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-600 hover:text-slate-900",
+                  ? "bg-[var(--list-card)] text-[var(--list-text)] shadow-sm"
+                  : "text-[var(--list-muted)] hover:text-[var(--list-text)]",
               ].join(" ")}
               aria-pressed={interactionMode === "navigate"}
               title="Doppelklick und Icon springen in den Ast (eine Ebene)"
@@ -380,7 +380,7 @@ export function ContextCardList({
           <button
             type="button"
             onClick={onAddSibling}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--list-border)] bg-[var(--list-card)] px-2.5 py-1.5 text-xs font-medium text-[var(--list-text)] hover:bg-[var(--list-hover)]"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden />
             Karte
@@ -421,7 +421,7 @@ export function ContextCardList({
                 {...shared}
               />
               {kids.length > 0 ? (
-                <div className="mt-0.5 border-l border-slate-200/80 ml-3 pl-1">
+                <div className="mt-0.5 ml-3 border-l border-[var(--list-border)] pl-1">
                   <NestedCardBranch
                     nodes={kids}
                     listParentId={node.id}

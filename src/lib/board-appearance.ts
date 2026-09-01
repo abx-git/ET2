@@ -1,6 +1,6 @@
 /** Configurable workspace chrome colors (persisted with the board) — same model as E2. */
 export interface BoardAppearance {
-  /** Canvas / Arbeitsbereich background. */
+  /** Canvas / Arbeitsbereich / Listen-Hintergrund. */
   canvas: string;
   /** Sidebars, docks, panels (solid). */
   sidebar: string;
@@ -13,10 +13,14 @@ export const DEFAULT_APPEARANCE: BoardAppearance = {
 };
 
 export const APPEARANCE_PRESETS: { id: string; label: string; appearance: BoardAppearance }[] = [
-  { id: "waypoints", label: "Waypoints", appearance: { canvas: "#1a2330", sidebar: "#161e28" } },
-  { id: "midnight", label: "Mitternacht", appearance: { canvas: "#0b1020", sidebar: "#121826" } },
   { id: "workshop", label: "Workshop hell", appearance: { canvas: "#e8ecf1", sidebar: "#f4f6f8" } },
   { id: "paper", label: "Papier", appearance: { canvas: "#f3efe6", sidebar: "#ebe4d6" } },
+  { id: "kreide", label: "Kreide", appearance: { canvas: "#f7f8fa", sidebar: "#ffffff" } },
+  { id: "moos", label: "Moos", appearance: { canvas: "#e4eee6", sidebar: "#eef5f0" } },
+  { id: "waypoints", label: "Waypoints", appearance: { canvas: "#1a2330", sidebar: "#161e28" } },
+  { id: "midnight", label: "Mitternacht", appearance: { canvas: "#0b1020", sidebar: "#121826" } },
+  { id: "tinte", label: "Tinte", appearance: { canvas: "#1c1a2e", sidebar: "#161428" } },
+  { id: "graphit", label: "Graphit", appearance: { canvas: "#2a2d32", sidebar: "#22252a" } },
 ];
 
 export function normalizeAppearance(raw: unknown): BoardAppearance {
@@ -56,11 +60,17 @@ function luminance(hex: string): number {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 }
 
+function rgba(hex: string, alpha: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /** Derive CSS custom properties from canvas + sidebar picks. */
 export function appearanceToCssVars(appearance: BoardAppearance): Record<string, string> {
   const sidebar = appearance.sidebar;
   const canvas = appearance.canvas;
   const lightUi = luminance(sidebar) > 0.55;
+  const lightList = luminance(canvas) > 0.55;
   const { r, g, b } = hexToRgb(sidebar);
   const bg = mix(sidebar, lightUi ? 255 : 0, 0.18);
   const control = mix(sidebar, lightUi ? 0 : 255, lightUi ? 0.06 : 0.12);
@@ -68,6 +78,21 @@ export function appearanceToCssVars(appearance: BoardAppearance): Record<string,
   const text = lightUi ? "#1a2330" : "#e8eef4";
   const muted = lightUi ? "#5c6b7a" : "#8b9aab";
   const border = lightUi ? "rgba(30, 40, 55, 0.14)" : "rgba(70, 90, 110, 0.55)";
+
+  const listText = lightList ? "#1a2330" : "#e8eef4";
+  const listMuted = lightList ? "#5c6b7a" : "#93a1b1";
+  const listCard = mix(canvas, lightList ? 255 : 0, lightList ? 0.62 : 0.16);
+  const listCardNested = mix(canvas, lightList ? 255 : 0, lightList ? 0.38 : 0.08);
+  const listHover = mix(canvas, lightList ? 0 : 255, lightList ? 0.07 : 0.14);
+  const listHeader = mix(canvas, lightList ? 255 : 0, lightList ? 0.28 : 0.1);
+  const listBorder = lightList ? "rgba(30, 40, 55, 0.14)" : "rgba(190, 210, 230, 0.2)";
+  const listFocus = lightList ? "#38bdf8" : "#7dd3fc";
+  const listCurrentBg = mix(listFocus, lightList ? 255 : 16, lightList ? 0.82 : 0.78);
+  const listCurrentText = lightList ? "#0c4a6e" : "#e0f2fe";
+  const listAddBg = mix(listFocus, lightList ? 255 : 16, lightList ? 0.86 : 0.82);
+  const listAddText = lightList ? "#0369a1" : "#bae6fd";
+  const listDrop = lightList ? "rgba(139, 92, 246, 0.16)" : "rgba(167, 139, 250, 0.28)";
+  const listDropBorder = lightList ? "#a78bfa" : "#c4b5fd";
 
   return {
     "--bg": bg,
@@ -82,6 +107,23 @@ export function appearanceToCssVars(appearance: BoardAppearance): Record<string,
     "--accent": "#0f766e",
     "--accent-2": "#ca8a04",
     "color-scheme": lightUi ? "light" : "dark",
+    "--list-bg": canvas,
+    "--list-header": listHeader,
+    "--list-card": listCard,
+    "--list-card-nested": listCardNested,
+    "--list-hover": listHover,
+    "--list-text": listText,
+    "--list-muted": listMuted,
+    "--list-border": listBorder,
+    "--list-focus": listFocus,
+    "--list-current-bg": listCurrentBg,
+    "--list-current-text": listCurrentText,
+    "--list-add-bg": listAddBg,
+    "--list-add-text": listAddText,
+    "--list-drop": listDrop,
+    "--list-drop-border": listDropBorder,
+    "--list-shadow": lightList ? "0 1px 2px rgba(15, 23, 42, 0.06)" : "0 1px 2px rgba(0, 0, 0, 0.35)",
+    "--list-ring": rgba(listFocus, 0.55),
   };
 }
 

@@ -26,7 +26,7 @@ export function BreadcrumbTrail({
         type="button"
         onClick={onDrillUp}
         disabled={path.length === 0}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--list-border)] bg-[var(--list-card)] text-[var(--list-muted)] hover:bg-[var(--list-hover)] hover:text-[var(--list-text)] disabled:opacity-40"
         title="Eine Ebene höher"
         aria-label="Eine Ebene höher"
       >
@@ -38,8 +38,8 @@ export function BreadcrumbTrail({
         className={[
           "rounded-md px-2 py-1 text-xs font-medium transition",
           path.length === 0
-            ? "bg-sky-50 text-sky-900"
-            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+            ? "bg-[var(--list-current-bg)] text-[var(--list-current-text)]"
+            : "text-[var(--list-muted)] hover:bg-[var(--list-hover)] hover:text-[var(--list-text)]",
         ].join(" ")}
       >
         Übersicht
@@ -48,15 +48,15 @@ export function BreadcrumbTrail({
         const isLast = i === path.length - 1;
         return (
           <span key={node.id} className="flex min-w-0 items-center gap-1">
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" aria-hidden />
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[var(--list-muted)] opacity-60" aria-hidden />
             <button
               type="button"
               onClick={() => onNavigateTo(node.id)}
               className={[
                 "max-w-[12rem] truncate rounded-md px-2 py-1 text-xs font-medium transition",
                 isLast
-                  ? "bg-sky-50 text-sky-900"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  ? "bg-[var(--list-current-bg)] text-[var(--list-current-text)]"
+                  : "text-[var(--list-muted)] hover:bg-[var(--list-hover)] hover:text-[var(--list-text)]",
               ].join(" ")}
               title={node.title.trim() || "(Ohne Titel)"}
             >

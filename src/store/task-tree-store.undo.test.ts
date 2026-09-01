@@ -201,4 +201,28 @@ describe("moveCardWithKeyboard", () => {
     expect(useTaskTreeStore.getState().moveCardWithKeyboard(b, "left")).toBe(true);
     expect(useTaskTreeStore.getState().roots.map((n) => n.title)).toEqual(["A", "B"]);
   });
+
+  it("keeps expand/collapse state after a keyboard move", () => {
+    const a = useTaskTreeStore.getState().addCardAfter(null);
+    useTaskTreeStore.getState().updateCard(a, { title: "A" });
+    const a1 = useTaskTreeStore.getState().addCardAfter(a);
+    useTaskTreeStore.getState().updateCard(a1, { title: "A1" });
+    const b = useTaskTreeStore.getState().addCardAfter(null);
+    useTaskTreeStore.getState().updateCard(b, { title: "B" });
+    useTaskTreeStore.getState().toggleCardCollapsed(a);
+    useTaskTreeStore.getState().toggleNodeCollapsed(a);
+    expect(useTaskTreeStore.getState().cardCollapsedIds).toEqual([a]);
+    expect(useTaskTreeStore.getState().collapsedIds).toEqual([a]);
+
+    expect(useTaskTreeStore.getState().moveCardWithKeyboard(b, "right")).toBe(true);
+    expect(useTaskTreeStore.getState().cardCollapsedIds).toEqual([a]);
+    expect(useTaskTreeStore.getState().collapsedIds).toEqual([a]);
+    expect(useTaskTreeStore.getState().roots.map((n) => n.title)).toEqual(["A"]);
+
+    expect(useTaskTreeStore.getState().moveCardWithKeyboard(b, "left")).toBe(true);
+    expect(useTaskTreeStore.getState().moveCardWithKeyboard(a, "down")).toBe(true);
+    expect(useTaskTreeStore.getState().cardCollapsedIds).toEqual([a]);
+    expect(useTaskTreeStore.getState().collapsedIds).toEqual([a]);
+    expect(useTaskTreeStore.getState().roots.map((n) => n.title)).toEqual(["B", "A"]);
+  });
 });

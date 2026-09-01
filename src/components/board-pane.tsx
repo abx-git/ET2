@@ -87,10 +87,10 @@ export function BoardPane({
   return (
     <div
       className={[
-        "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-colors",
+        "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden text-[var(--list-text)] transition-colors",
         active
-          ? "bg-white ring-1 ring-inset ring-sky-300/80"
-          : "bg-slate-50/60 opacity-[0.92]",
+          ? "bg-[var(--list-bg)] ring-1 ring-inset ring-[var(--list-ring)]"
+          : "bg-[var(--list-bg)] opacity-[0.92]",
       ].join(" ")}
       data-board-pane-shell={paneId}
       data-active-pane={active ? "true" : "false"}
@@ -98,8 +98,8 @@ export function BoardPane({
     >
       <div
         className={[
-          "shrink-0 border-b px-3 py-2",
-          active ? "border-sky-100 bg-sky-50/40" : "border-slate-100",
+          "shrink-0 border-b border-[var(--list-border)] px-3 py-2",
+          active ? "bg-[var(--list-header)]" : "",
         ].join(" ")}
       >
         <BreadcrumbTrail

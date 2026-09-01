@@ -2037,7 +2037,7 @@ export function TaskBoard() {
                       <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
                         {renderPane("left")}
                         <div
-                          className="w-px shrink-0 bg-slate-200"
+                          className="w-px shrink-0 bg-[var(--list-border)]"
                           aria-hidden
                         />
                         {renderPane("right")}

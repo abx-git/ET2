@@ -57,7 +57,7 @@ function OutlineGap({
       data-outline-drop-id={outlineGapId(listParentId, beforeId)}
       className={[
         "mx-1 rounded transition-all",
-        isOver ? "h-2.5 bg-sky-200/90 ring-1 ring-sky-400" : "h-1",
+        isOver ? "h-2.5 bg-[var(--list-drop)] ring-1 ring-[var(--list-drop-border)]" : "h-1",
       ].join(" ")}
       aria-hidden
     />
@@ -151,8 +151,8 @@ function OutlineRow({
         selected
           ? "bg-[var(--control-hover)] font-medium ring-1 ring-[var(--border)]"
           : "hover:bg-[var(--control)]",
-        keyboardFocus && !selected ? "ring-2 ring-sky-300/90" : "",
-        keyboardFocus && selected ? "ring-2 ring-sky-400/80" : "",
+        keyboardFocus && !selected ? "ring-2 ring-[var(--list-focus)]" : "",
+        keyboardFocus && selected ? "ring-2 ring-[var(--list-focus)]" : "",
         isDragging ? "opacity-40" : "",
         isNestTarget || isOver
           ? isNoteNode(node)
@@ -214,7 +214,7 @@ function OutlineRow({
           }}
           onPointerDown={(e) => e.stopPropagation()}
           autoFocus
-          className="min-w-0 flex-1 rounded border border-sky-300 bg-[var(--panel-solid)] px-1.5 py-0.5 text-sm text-[var(--text)] outline-none ring-2 ring-sky-200"
+          className="min-w-0 flex-1 rounded border border-[var(--list-focus)] bg-[var(--panel-solid)] px-1.5 py-0.5 text-sm text-[var(--text)] outline-none ring-2 ring-[var(--list-ring)]"
           aria-label="Titel"
         />
       ) : (
@@ -400,7 +400,7 @@ export function OutlineRail({
 
   if (light) {
     return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--bg)]">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--list-bg)] text-[var(--list-text)]">
         <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-3 sm:px-6">
           <div className="min-h-0 flex-1 overflow-y-auto py-3">
             {rows.length === 0 ? (

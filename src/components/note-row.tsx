@@ -33,11 +33,11 @@ import type { TaskNode } from "@/types/task-node";
 import { NoteMarkdownContent } from "./note-markdown-content";
 
 const rowMenuItemClass =
-  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50";
+  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-[var(--list-text)] hover:bg-[var(--list-hover)]";
 const rowMenuItemDangerClass =
-  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-red-700 hover:bg-red-50";
+  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-red-600 hover:bg-red-500/10";
 const rowMenuPanelClass =
-  "fixed z-[80] min-w-[11rem] rounded-md border border-slate-200 bg-white py-0.5 shadow-lg ring-1 ring-slate-900/5";
+  "fixed z-[80] min-w-[11rem] rounded-md border border-[var(--list-border)] bg-[var(--list-card)] py-0.5 shadow-lg";
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
   if (!target) return false;
@@ -252,7 +252,7 @@ export function NoteRow({
       }}
       onContextMenu={handleContextMenu}
       className={[
-        "group relative flex touch-none cursor-grab items-stretch gap-1 rounded-lg border px-2 py-2 shadow-sm transition active:cursor-grabbing",
+        "group relative flex touch-none cursor-grab items-stretch gap-1 rounded-lg border px-2 py-2 shadow-[var(--list-shadow)] transition active:cursor-grabbing",
         accent.cardBorderBg,
         nestDepth > 0 ? accent.cardBorderBgNested : "",
         isDragging ? "opacity-40" : "",
@@ -280,8 +280,7 @@ export function NoteRow({
             type="button"
             id={headingId}
             className={[
-              "mb-0.5 w-full truncate text-left text-sm font-medium text-slate-900",
-              accent.titleHover,
+              "mb-0.5 w-full truncate text-left text-sm font-medium text-[var(--list-text)] hover:underline",
             ].join(" ")}
             title={displayTitle}
             onPointerDown={(e) => e.stopPropagation()}
@@ -300,7 +299,7 @@ export function NoteRow({
         {hasMarkdown ? (
           <NoteMarkdownContent markdown={node.markdown} compact />
         ) : (
-          <p className="mt-0.5 text-[11px] italic text-slate-400">Leere Notiz — zum Bearbeiten öffnen</p>
+          <p className="mt-0.5 text-[11px] italic text-[var(--list-muted)]">Leere Notiz — zum Bearbeiten öffnen</p>
         )}
       </div>
 
@@ -310,10 +309,7 @@ export function NoteRow({
       >
         <button
           type="button"
-          className={[
-            "flex h-7 w-7 items-center justify-center rounded-md border",
-            accent.actionButton,
-          ].join(" ")}
+          className="list-icon-btn"
           title="Unterkarte"
           aria-label="Unterkarte anlegen"
           onClick={(e) => {
@@ -326,7 +322,7 @@ export function NoteRow({
         {hasChildren ? (
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="list-icon-btn"
             title={expandMode ? (isCollapsed ? "Aufklappen" : "Zuklappen") : "Hinein"}
             aria-label={
               expandMode
@@ -352,7 +348,7 @@ export function NoteRow({
         <div ref={menuRef} className="relative">
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+            className="list-icon-btn"
             title="Aktionen"
             aria-label="Aktionen"
             aria-haspopup="menu"

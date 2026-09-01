@@ -13,16 +13,16 @@ function markdownComponents(accent: ReturnType<typeof noteAccentClasses>): Compo
   return {
     p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-snug">{children}</p>,
     h1: ({ children }) => (
-      <h3 className="mb-1 mt-0.5 text-sm font-semibold leading-snug text-slate-900">{children}</h3>
+      <h3 className="mb-1 mt-0.5 text-sm font-semibold leading-snug text-[var(--list-text)]">{children}</h3>
     ),
     h2: ({ children }) => (
-      <h4 className="mb-1 mt-0.5 text-[13px] font-semibold leading-snug text-slate-900">{children}</h4>
+      <h4 className="mb-1 mt-0.5 text-[13px] font-semibold leading-snug text-[var(--list-text)]">{children}</h4>
     ),
     h3: ({ children }) => (
-      <h5 className="mb-1 mt-0.5 text-xs font-semibold leading-snug text-slate-800">{children}</h5>
+      <h5 className="mb-1 mt-0.5 text-xs font-semibold leading-snug text-[var(--list-text)]">{children}</h5>
     ),
     h4: ({ children }) => (
-      <h6 className="mb-1 mt-0.5 text-xs font-medium leading-snug text-slate-800">{children}</h6>
+      <h6 className="mb-1 mt-0.5 text-xs font-medium leading-snug text-[var(--list-text)]">{children}</h6>
     ),
     ul: ({ children }) => <ul className="mb-1.5 list-disc space-y-0.5 pl-4 last:mb-0">{children}</ul>,
     ol: ({ children }) => (
@@ -31,7 +31,7 @@ function markdownComponents(accent: ReturnType<typeof noteAccentClasses>): Compo
     li: ({ children }) => <li className="leading-snug">{children}</li>,
     blockquote: ({ children }) => (
       <blockquote
-        className={["mb-1.5 border-l-2 pl-2 text-slate-600 last:mb-0", accent.markdownBlockquote].join(
+        className={["mb-1.5 border-l-2 pl-2 text-[var(--list-muted)] last:mb-0", accent.markdownBlockquote].join(
           " ",
         )}
       >
@@ -67,7 +67,7 @@ function markdownComponents(accent: ReturnType<typeof noteAccentClasses>): Compo
     },
     pre: ({ children }) => <pre className="mb-1.5 overflow-x-auto last:mb-0">{children}</pre>,
     hr: () => <hr className={["my-2", accent.markdownHr].join(" ")} />,
-    strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
+    strong: ({ children }) => <strong className="font-semibold text-[var(--list-text)]">{children}</strong>,
     em: ({ children }) => <em className="italic">{children}</em>,
   };
 }
@@ -107,7 +107,7 @@ export function NoteMarkdownContent({
     <div
       data-card-scroll={fillContainer || compact ? "" : undefined}
       className={[
-        "note-markdown text-[11px] text-slate-700",
+        "note-markdown text-[11px] text-[var(--list-muted)]",
         fillContainer
           ? "h-full min-h-0 overflow-y-auto"
           : compact

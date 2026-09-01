@@ -17,6 +17,23 @@
   --radius: 12px;
   --shadow: 0 10px 36px rgba(0, 0, 0, 0.12);
   --canvas: #edf0f4;
+  --list-bg: #e8ecf1;
+  --list-header: #eef1f5;
+  --list-card: #ffffff;
+  --list-card-nested: #f7f8fa;
+  --list-hover: #e8ebef;
+  --list-text: #1a2330;
+  --list-muted: #5c6b7a;
+  --list-border: rgba(30, 40, 55, 0.14);
+  --list-focus: #38bdf8;
+  --list-current-bg: #e0f2fe;
+  --list-current-text: #0c4a6e;
+  --list-add-bg: #e0f2fe;
+  --list-add-text: #0369a1;
+  --list-drop: rgba(139, 92, 246, 0.16);
+  --list-drop-border: #a78bfa;
+  --list-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --list-ring: rgba(56, 189, 248, 0.55);
 }
 
 body {
@@ -73,6 +90,24 @@ body {
 
   .dock-field:focus {
     border-color: var(--accent);
+  }
+
+  .list-icon-btn {
+    display: flex;
+    height: 1.75rem;
+    width: 1.75rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    border: 1px solid var(--list-border);
+    background: var(--list-card);
+    color: var(--list-muted);
+  }
+
+  .list-icon-btn:hover {
+    background: var(--list-hover);
+    color: var(--list-text);
   }
 }
 
