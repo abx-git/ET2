@@ -155,6 +155,7 @@ export function TaskCanvasSymbol({
   const def = getSymbolTypeDefinition(symbolType);
   const rect = taskCardRect(node);
   const attrs = node.entityAttributes ?? [];
+  const didDragRef = useRef(false);
   const drag = useRef<{
     ox: number;
     oy: number;
@@ -362,6 +363,7 @@ export function TaskCanvasSymbol({
         e.stopPropagation();
         if (editing) return;
         onSelect(e.shiftKey);
+        didDragRef.current = false;
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         drag.current = {
           ox: e.clientX,
@@ -381,6 +383,7 @@ export function TaskCanvasSymbol({
         const dyPx = e.clientY - drag.current.oy;
         if (!drag.current.moved && Math.abs(dxPx) + Math.abs(dyPx) >= 4) {
           drag.current.moved = true;
+          didDragRef.current = true;
         }
         const dx = dxPx / zoom;
         const dy = dyPx / zoom;
@@ -434,10 +437,10 @@ export function TaskCanvasSymbol({
             ) : (
               <span
                 data-card-title
-                className="max-w-full cursor-text truncate px-1 text-center text-[12px] font-semibold"
-                onPointerDown={(e) => e.stopPropagation()}
+                className="block w-full truncate px-1 text-center text-[12px] font-semibold"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (didDragRef.current) return;
                   beginEdit();
                 }}
               >
@@ -461,12 +464,11 @@ export function TaskCanvasSymbol({
                 placeholder={"* id\nname : text\n~ kunden_id"}
               />
             ) : (
-              <button
-                type="button"
-                className="flex h-full w-full flex-col items-stretch overflow-hidden text-left"
-                onPointerDown={(e) => e.stopPropagation()}
+              <div
+                className="flex h-full w-full flex-col items-stretch overflow-hidden"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (didDragRef.current) return;
                   beginAttrEdit();
                 }}
                 title="Attribute bearbeiten"
@@ -500,20 +502,18 @@ export function TaskCanvasSymbol({
                     );
                   })
                 )}
-              </button>
+              </div>
             )}
           </div>
         </div>
-      ) : null}
-
-      {titleOnShape ? (
+      ) : titleOnShape ? (
         <div
           className={[
             "absolute inset-0 z-10 flex items-center justify-center px-2",
             symbolType === "systemBoundary" ? "items-start pt-2" : "",
           ].join(" ")}
         >
-          {editing ? (
+          {editing === "title" ? (
             <input
               ref={inputRef}
               data-card-title
@@ -546,7 +546,7 @@ export function TaskCanvasSymbol({
             </span>
           )}
         </div>
-      ) : editing ? (
+      ) : editing === "title" ? (
         <input
           ref={inputRef}
           data-card-title
