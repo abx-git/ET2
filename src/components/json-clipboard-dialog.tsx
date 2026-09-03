@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useLayoutEffect, useMemo, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
 import {
   branchExportFilename,
@@ -57,6 +57,9 @@ export interface TextExportPreviewDialogProps {
   contentLabel?: string;
   /** Monospace-Darstellung (JSON); sonst normaler Fließtext. */
   monospace?: boolean;
+  downloadFilename?: string;
+  downloadMime?: string;
+  downloadLabel?: string;
   onClose: () => void;
 }
 
@@ -67,6 +70,9 @@ export function TextExportPreviewDialog({
   text,
   contentLabel = "Exporttext",
   monospace = true,
+  downloadFilename,
+  downloadMime = "text/plain",
+  downloadLabel = "Herunterladen",
   onClose,
 }: TextExportPreviewDialogProps) {
   const titleId = useId();
@@ -133,6 +139,15 @@ export function TextExportPreviewDialog({
           >
             Schließen
           </button>
+          {downloadFilename ? (
+            <button
+              type="button"
+              onClick={() => downloadTextFile(downloadFilename, text, downloadMime)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              {downloadLabel}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void handleCopy()}
@@ -483,14 +498,29 @@ export interface JsonPasteImportDialogProps {
   open: boolean;
   title: string;
   hint?: string;
+  placeholder?: string;
+  applyLabel?: string;
+  fileAccept?: string;
+  fileButtonLabel?: string;
   onClose: () => void;
   /** Wird bei gültigem Board- oder Teilbaum-JSON aufgerufen; Dialog schließen erfolgt im Parent. */
   onApplyPastedText: (text: string) => void;
 }
 
-export function JsonPasteImportDialog({ open, title, hint, onClose, onApplyPastedText }: JsonPasteImportDialogProps) {
+export function JsonPasteImportDialog({
+  open,
+  title,
+  hint,
+  placeholder = '{ "format": "hierarchical-task-manager", ... }',
+  applyLabel = "Prüfen und importieren",
+  fileAccept,
+  fileButtonLabel = "Datei laden",
+  onClose,
+  onApplyPastedText,
+}: JsonPasteImportDialogProps) {
   const titleId = useId();
   const areaId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState("");
 
   useLayoutEffect(() => {
@@ -501,6 +531,15 @@ export function JsonPasteImportDialog({ open, title, hint, onClose, onApplyPaste
 
   const handleApply = () => {
     onApplyPastedText(draft);
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    void file.text().then((text) => setDraft(text)).catch(() => {
+      window.alert("Die Datei konnte nicht gelesen werden.");
+    });
   };
 
   return (
@@ -533,11 +572,30 @@ export function JsonPasteImportDialog({ open, title, hint, onClose, onApplyPaste
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             spellCheck={false}
-            placeholder='{ "format": "hierarchical-task-manager", ... }'
+            placeholder={placeholder}
             className="h-[min(55vh,28rem)] w-full resize-y rounded-lg border border-slate-200 bg-white p-3 font-mono text-[11px] leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-sky-400/50"
           />
         </div>
         <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 px-4 py-3">
+          {fileAccept ? (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={fileAccept}
+                className="hidden"
+                aria-hidden
+                onChange={handleFileChange}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="mr-auto rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                {fileButtonLabel}
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             onClick={onClose}
@@ -550,7 +608,7 @@ export function JsonPasteImportDialog({ open, title, hint, onClose, onApplyPaste
             onClick={handleApply}
             className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
           >
-            Prüfen und importieren
+            {applyLabel}
           </button>
         </div>
       </div>

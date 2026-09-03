@@ -39,6 +39,11 @@ import {
   normalizeAppearance,
   type BoardAppearance,
 } from "@/lib/board-appearance";
+import {
+  parseCanvasGroupsMap,
+  serializeCanvasGroupsMap,
+  type CanvasGroup,
+} from "@/lib/canvas-group";
 import hierarchicalTaskManagerExportV1Schema from "@/schemas/hierarchical-task-manager.export.v1.schema.json";
 
 export const EXPORT_FORMAT = "hierarchical-task-manager" as const;
@@ -184,6 +189,8 @@ export interface BoardSnapshotV1 {
   relations?: TaskRelation[];
   /** Farbschema (E2-kompatibel). */
   appearance?: BoardAppearance;
+  /** Visuelle Gruppierungsrahmen auf dem Canvas, je Kontext-Ebene. */
+  canvasGroups?: Record<string, CanvasGroup[]>;
 }
 
 export interface SubtreeSnapshotV1 {
@@ -652,6 +659,9 @@ export function parseExportedDocument(text: string): ExportedDocumentV1 {
         ...(root.appearance !== undefined
           ? { appearance: normalizeAppearance(root.appearance) }
           : {}),
+        ...(root.canvasGroups !== undefined
+          ? { canvasGroups: parseCanvasGroupsMap(root.canvasGroups) }
+          : {}),
       };
     }
 
@@ -728,6 +738,7 @@ export function buildBoardSnapshot(
   filterExcludeTags: string[] = [],
   relations: TaskRelation[] = [],
   appearance: BoardAppearance = DEFAULT_APPEARANCE,
+  canvasGroups: Record<string, CanvasGroup[]> = {},
 ): BoardSnapshotV1 {
   const co: Record<string, string> = {};
   for (const [k, v] of Object.entries(columnTitleOverrides)) {
@@ -737,6 +748,7 @@ export function buildBoardSnapshot(
   const schedule = parseScheduleFilterKinds(filterScheduleKinds);
   const combine = parseFilterCombineMode(filterCombineMode);
   const safeRelations = sanitizeRelations(roots, relations ?? []);
+  const groups = serializeCanvasGroupsMap(canvasGroups);
   return {
     format: EXPORT_FORMAT,
     version: EXPORT_VERSION,
@@ -777,6 +789,7 @@ export function buildBoardSnapshot(
       : {}),
     ...(safeRelations.length ? { relations: safeRelations } : {}),
     appearance: normalizeAppearance(appearance),
+    ...(Object.keys(groups).length ? { canvasGroups: groups } : {}),
   };
 }
 
@@ -849,6 +862,7 @@ export type BoardImportPayload = {
   templates?: TemplateRecordV1[];
   relations?: TaskRelation[];
   appearance?: BoardAppearance;
+  canvasGroups?: Record<string, CanvasGroup[]>;
 };
 
 export function boardSnapshotToReplacePayload(snap: BoardSnapshotV1): BoardImportPayload {
@@ -888,6 +902,9 @@ export function boardSnapshotToReplacePayload(snap: BoardSnapshotV1): BoardImpor
     ...(snap.templates?.length ? { templates: [...snap.templates] } : {}),
     relations: sanitizeRelations(roots, snap.relations ?? []),
     appearance: normalizeAppearance(snap.appearance),
+    ...(snap.canvasGroups !== undefined
+      ? { canvasGroups: parseCanvasGroupsMap(snap.canvasGroups) }
+      : {}),
   };
 }
 
@@ -939,6 +956,7 @@ export function stableBoardStateKey(payload: BoardImportPayload): string {
     templates,
     relations: sanitizeRelations(payload.roots, payload.relations ?? []),
     appearance: normalizeAppearance(payload.appearance),
+    canvasGroups: serializeCanvasGroupsMap(payload.canvasGroups ?? {}),
   });
 }
 

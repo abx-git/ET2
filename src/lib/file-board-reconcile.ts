@@ -123,6 +123,7 @@ export function boardJsonFromStoreState(): string {
       s.filterExcludeTags,
       s.relations,
       s.appearance,
+      s.canvasGroups,
     ),
   );
 }
@@ -176,5 +177,6 @@ export function boardPersistKeyFromStoreState(): string {
     templates: getTemplatesSnapshot(),
     relations: s.relations,
     appearance: s.appearance,
+    canvasGroups: s.canvasGroups,
   });
 }

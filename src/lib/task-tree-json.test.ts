@@ -8,6 +8,7 @@ import {
   EXPORT_FORMAT,
   EXPORT_VERSION,
   boardExportTextsEquivalent,
+  boardSnapshotToReplacePayload,
   buildBoardSnapshot,
   buildSubtreeSnapshot,
   isBoardSnapshot,
@@ -306,6 +307,57 @@ describe("task-tree-json", () => {
     };
     const n = taskNodeFromJson(legacyNode);
     expect(n.tags.map((t) => t.toLowerCase())).toContain("erledigt");
+  });
+
+  it("roundtrips canvas groups and migrates legacy colors", () => {
+    const roots: TaskNode[] = [sampleNode("r1")];
+    const doc = buildBoardSnapshot(
+      roots,
+      [],
+      {},
+      mergeCardFieldVisibility({}),
+      false,
+      true,
+      [],
+      undefined,
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      "expand",
+      "and",
+      undefined,
+      [],
+      [],
+      undefined,
+      {
+        __root__: [
+          {
+            id: "g1",
+            label: "Sprint",
+            x: 10,
+            y: 20,
+            width: 400,
+            height: 300,
+            color: "bg-sky-50/60 border-sky-300",
+          },
+        ],
+      },
+    );
+    expect(doc.canvasGroups?.__root__?.[0]?.color).toBe("sky");
+    const parsed = parseExportedDocument(stringifyExportedDocument(doc));
+    expect(isBoardSnapshot(parsed)).toBe(true);
+    if (isBoardSnapshot(parsed)) {
+      expect(parsed.canvasGroups?.__root__?.[0]).toMatchObject({
+        id: "g1",
+        label: "Sprint",
+        color: "sky",
+      });
+      const payload = boardSnapshotToReplacePayload(parsed);
+      expect(payload.canvasGroups?.__root__?.[0]?.color).toBe("sky");
+    }
   });
 
   it("rejects invalid JSON", () => {

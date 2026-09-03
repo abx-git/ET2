@@ -4,7 +4,7 @@
  */
 
 import { APP_VERSION } from "@/lib/app-version";
-import type { CanvasGroup } from "@/lib/canvas-group";
+import { groupColorExport, type CanvasGroup } from "@/lib/canvas-group";
 import { compareCanvasStackOrder } from "@/lib/canvas-stack";
 import type { CardColorId } from "@/lib/card-color";
 import { DEFAULT_NOTE_ACCENT, noteAccentPalette, type NoteAccentId } from "@/lib/note-accent";
@@ -53,15 +53,6 @@ const CARD_PALETTE: Record<CardColorId, Palette> = {
 const DEFAULT_CARD: Palette = { fill: "#ffffff", stroke: "#ffffff", accent: "#94a3b8" };
 const SYMBOL_FILL = "#f8fafc";
 const SYMBOL_STROKE = "#334155";
-
-const GROUP_PALETTE: Record<string, { fill: string; stroke: string }> = {
-  "bg-sky-50/60 border-sky-300": { fill: "#f0f9ff", stroke: "#7dd3fc" },
-  "bg-emerald-50/60 border-emerald-300": { fill: "#ecfdf5", stroke: "#6ee7b7" },
-  "bg-amber-50/60 border-amber-300": { fill: "#fffbeb", stroke: "#fcd34d" },
-  "bg-purple-50/60 border-purple-300": { fill: "#faf5ff", stroke: "#d8b4fe" },
-  "bg-rose-50/60 border-rose-300": { fill: "#fff1f2", stroke: "#fda4af" },
-  "bg-slate-50/60 border-slate-300": { fill: "#f8fafc", stroke: "#cbd5e1" },
-};
 
 function num(v: number): string {
   return String(Math.round(v * 100) / 100);
@@ -324,7 +315,7 @@ function renderSymbol(node: TaskNode): string {
 }
 
 function renderGroup(group: CanvasGroup): string {
-  const pal = GROUP_PALETTE[group.color ?? ""] ?? GROUP_PALETTE["bg-slate-50/60 border-slate-300"]!;
+  const pal = groupColorExport(group.color);
   const labelY = group.y + 18;
   return `<g data-et2-id="${xmlEscape(group.id)}" data-et2-kind="group">
   <rect x="${num(group.x)}" y="${num(group.y)}" width="${num(group.width)}" height="${num(group.height)}" rx="8" ry="8" fill="${pal.fill}" fill-opacity="0.6" stroke="${pal.stroke}" stroke-width="2" stroke-dasharray="6 4"/>
@@ -472,7 +463,7 @@ function buildMxGraphModelXml(
 
   for (const group of scene.groups ?? []) {
     const id = mxCellId(group.id, "g_", used);
-    const pal = GROUP_PALETTE[group.color ?? ""] ?? GROUP_PALETTE["bg-slate-50/60 border-slate-300"]!;
+    const pal = groupColorExport(group.color);
     const style = mxStyle({
       rounded: true,
       arcSize: 8,

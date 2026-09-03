@@ -69,9 +69,27 @@ describe("canvas align / duplicate / group move", () => {
     const s = useTaskTreeStore.getState();
     expect(s.canvasGroups.__root__?.[0]?.x).toBe(15);
     expect(s.canvasGroups.__root__?.[0]?.y).toBe(5);
+    expect(s.canvasGroups.__root__?.[0]?.color).toBe("sky");
     expect(s.roots.find((n) => n.id === "a")?.x).toBe(25);
     expect(s.roots.find((n) => n.id === "a")?.y).toBe(25);
     expect(s.roots.find((n) => n.id === "b")?.x).toBe(80);
+  });
+
+  it("loads canvas groups from a board import", () => {
+    runWithoutBoardHistory(() => {
+      useTaskTreeStore.getState().replaceBoardFromImport({
+        roots: [placedCard("a", 10, 20)],
+        pathIds: [],
+        columnTitleOverrides: {},
+        canvasGroups: {
+          __root__: [{ id: "g1", label: "Sprint", x: 0, y: 0, width: 200, height: 150, color: "emerald" }],
+        },
+      });
+    });
+    expect(useTaskTreeStore.getState().canvasGroups.__root__?.[0]).toMatchObject({
+      id: "g1",
+      color: "emerald",
+    });
   });
 
   it("does not rewrite roots when the snapped position is unchanged", () => {
@@ -107,5 +125,33 @@ describe("canvas align / duplicate / group move", () => {
 
     useTaskTreeStore.temporal.getState().undo();
     expect(useTaskTreeStore.getState().roots[0]?.x).toBe(startX);
+  });
+
+  it("imports a mermaid flowchart onto the current canvas", () => {
+    const result = useTaskTreeStore.getState().importCanvasMermaid(`
+flowchart TD
+  Start[Los] --> Ende[Fertig]
+`);
+    expect(result.kind).toBe("flowchart");
+    expect(result.nodeIds).toHaveLength(2);
+    expect(result.relationCount).toBe(1);
+    const roots = useTaskTreeStore.getState().roots;
+    expect(roots.map((n) => n.title)).toEqual(expect.arrayContaining(["a", "b", "Los", "Fertig"]));
+    expect(useTaskTreeStore.getState().relations).toHaveLength(1);
+    expect(useTaskTreeStore.getState().selectedCanvasNodeIds).toEqual(result.nodeIds);
+    const imported = roots.filter((n) => n.title === "Los" || n.title === "Fertig");
+    expect(imported.every((n) => (n.x ?? 0) >= 180)).toBe(true);
+  });
+
+  it("imports a mermaid mindmap as nested cards", () => {
+    const result = useTaskTreeStore.getState().importCanvasMermaid(`
+mindmap
+  Thema
+    Kind
+`);
+    expect(result.kind).toBe("mindmap");
+    expect(result.nodeIds).toHaveLength(1);
+    const root = useTaskTreeStore.getState().roots.find((n) => n.title === "Thema");
+    expect(root?.children.map((c) => c.title)).toEqual(["Kind"]);
   });
 });

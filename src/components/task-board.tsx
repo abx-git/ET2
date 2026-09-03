@@ -231,6 +231,7 @@ export function TaskBoard() {
   const setBoardViewMode = useTaskTreeStore((s) => s.setBoardViewMode);
   const relations = useTaskTreeStore((s) => s.relations);
   const appearance = useTaskTreeStore((s) => s.appearance);
+  const canvasGroups = useTaskTreeStore((s) => s.canvasGroups);
   const isMobileLayout = useSyncExternalStore(
     subscribeMobileLayout,
     getMobileLayoutSnapshot,
@@ -945,6 +946,7 @@ export function TaskBoard() {
             s.filterExcludeTags,
             s.relations,
             s.appearance,
+            s.canvasGroups,
           ),
         );
         setPasteImportOpen(false);
@@ -1546,6 +1548,7 @@ export function TaskBoard() {
         s.filterExcludeTags,
         s.relations,
         s.appearance,
+        s.canvasGroups,
       ),
     );
   }, [
@@ -1567,6 +1570,7 @@ export function TaskBoard() {
     cardInteractionMode,
     noteAccentColor,
     appearance,
+    canvasGroups,
     boardJsonExportOpen,
   ]);
 

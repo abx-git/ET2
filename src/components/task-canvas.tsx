@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { flushSync } from "react-dom";
 
 import { CanvasToolbar } from "@/components/canvas-toolbar";
+import { JsonPasteImportDialog, TextExportPreviewDialog } from "@/components/json-clipboard-dialog";
 import { TaskCanvasCard } from "@/components/task-canvas-card";
 import { TaskCanvasSymbol } from "@/components/task-canvas-symbol";
 import { TaskConnectors } from "@/components/task-connectors";
@@ -15,7 +16,17 @@ import { contextChildren } from "@/lib/board-context";
 import { nodeMatchesBoardFilters } from "@/lib/board-filters";
 import { nodeHasCanvasPosition } from "@/lib/canvas-layout";
 import { compareCanvasStackOrder } from "@/lib/canvas-stack";
-import { containedNodeIds } from "@/lib/canvas-group";
+import { listSchemeFromAppearance } from "@/lib/board-appearance";
+import {
+  containedNodeIds,
+  defaultGroupColor,
+  DEFAULT_GROUP_HEIGHT,
+  DEFAULT_GROUP_WIDTH,
+  fitGroupToContents,
+  groupRectAroundNodes,
+  GROUP_COLOR_OPTIONS,
+  type GroupColorId,
+} from "@/lib/canvas-group";
 import {
   ALIGN_MODE_LABELS,
   ALIGN_MODES_THREE,
@@ -41,6 +52,7 @@ import {
 } from "@/lib/diagram-symbol";
 import { exportVisibleCanvasToPdf } from "@/lib/canvas-pdf-export";
 import { exportVisibleCanvasToPng, exportCanvasSceneToSvg, copyCanvasSceneToDrawioClipboard } from "@/lib/canvas-image-export";
+import { exportCanvasAsMermaid } from "@/lib/canvas-mermaid";
 import { exportCanvasAsPrompt } from "@/lib/prompt-export";
 import { relationsForContext } from "@/lib/task-relations";
 import { isTaskMarkedDone } from "@/lib/task-tags";
@@ -54,11 +66,15 @@ const WORLD_H = 3000;
 
 const EMPTY_GROUPS: import("@/lib/canvas-group").CanvasGroup[] = [];
 
+function newCanvasGroupId(): string {
+  return `grp-${Date.now().toString(36)}`;
+}
+
 type CanvasGeomOp =
   | { kind: "abs"; nodeId: string; x: number; y: number }
   | { kind: "delta"; dx: number; dy: number }
   | { kind: "group"; id: string; members: string[]; dx: number; dy: number }
-  | { kind: "groupResize"; id: string; width: number; height: number }
+  | { kind: "groupResize"; id: string; x: number; y: number; width: number; height: number }
   | { kind: "resize"; nodeId: string; patch: { x: number; y: number; width: number; height: number } }
   | { kind: "rotate"; nodeId: string; rotation: number };
 
@@ -148,6 +164,7 @@ export function TaskCanvas({
   const filterScheduleKinds = useTaskTreeStore((s) => s.filterScheduleKinds);
   const filterCombineMode = useTaskTreeStore((s) => s.filterCombineMode);
 
+  const appearance = useTaskTreeStore((s) => s.appearance);
   const canvasGroups = useTaskTreeStore((s) => s.canvasGroups[s.contextNodeId ?? "__root__"] || EMPTY_GROUPS);
   const addCanvasGroup = useTaskTreeStore((s) => s.addCanvasGroup);
   const updateCanvasGroup = useTaskTreeStore((s) => s.updateCanvasGroup);
@@ -155,14 +172,21 @@ export function TaskCanvas({
   const moveCanvasGroupBy = useTaskTreeStore((s) => s.moveCanvasGroupBy);
   const alignCanvasSelection = useTaskTreeStore((s) => s.alignCanvasSelection);
   const duplicateCanvasSelection = useTaskTreeStore((s) => s.duplicateCanvasSelection);
+  const importCanvasMermaid = useTaskTreeStore((s) => s.importCanvasMermaid);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const [panning, setPanning] = useState(false);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [pendingTitleEditId, setPendingTitleEditId] = useState<string | null>(null);
   const [lasso, setLasso] = useState<LassoRect | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    nodeId?: string;
+    groupId?: string;
+  } | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [pendingGroupLabelEditId, setPendingGroupLabelEditId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [nestHoverId, setNestHoverId] = useState<string | null>(null);
   const [symbolPaletteOpen, setSymbolPaletteOpen] = useState(false);
@@ -171,6 +195,9 @@ export function TaskCanvas({
   const [pdfExporting, setPdfExporting] = useState(false);
   const [imageExporting, setImageExporting] = useState<"png" | "svg" | null>(null);
   const [drawioCopied, setDrawioCopied] = useState(false);
+  const [mermaidExportOpen, setMermaidExportOpen] = useState(false);
+  const [mermaidExportText, setMermaidExportText] = useState("");
+  const [mermaidPasteOpen, setMermaidPasteOpen] = useState(false);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const spaceDown = useRef(false);
   const multiDrag = useRef<{ ox: number; oy: number } | null>(null);
@@ -263,12 +290,18 @@ export function TaskCanvas({
         setPlacingSymbolType(null);
         setSymbolPaletteOpen(false);
         setContextSymbolGroup(null);
+        setSelectedGroupId(null);
       }
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedRelationId) {
+      if ((e.key === "Delete" || e.key === "Backspace") && (selectedRelationId || selectedGroupId)) {
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
         e.preventDefault();
-        disconnectRelation(selectedRelationId);
+        if (selectedRelationId) {
+          disconnectRelation(selectedRelationId);
+        } else if (selectedGroupId) {
+          removeCanvasGroup(selectedGroupId);
+          setSelectedGroupId(null);
+        }
       }
       // Select all with Ctrl/Cmd+A
       if ((e.ctrlKey || e.metaKey) && e.key === "a") {
@@ -305,6 +338,8 @@ export function TaskCanvas({
     disconnectRelation,
     nodes,
     selectedRelationId,
+    selectedGroupId,
+    removeCanvasGroup,
     setRelationConnectMode,
     setRelationDraftSourceId,
     setSelectedRelationId,
@@ -566,13 +601,32 @@ export function TaskCanvas({
     window.setTimeout(() => setDrawioCopied(false), 1400);
   }, [nodes, visibleRelations, canvasGroups, completedTag, noteAccentColor]);
 
+  const openMermaidExport = useCallback(() => {
+    setMermaidExportText(exportCanvasAsMermaid(nodes, visibleRelations, canvasGroups));
+    setMermaidExportOpen(true);
+  }, [nodes, visibleRelations, canvasGroups]);
+
+  const applyMermaidImport = useCallback(
+    (text: string) => {
+      try {
+        importCanvasMermaid(text);
+        setMermaidPasteOpen(false);
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : "Mermaid konnte nicht importiert werden.");
+      }
+    },
+    [importCanvasMermaid],
+  );
+
   const selectCanvasNodeForMenu = useCallback((nodeId: string) => {
     const multi = useTaskTreeStore.getState().selectedCanvasNodeIds;
     if (multi.length > 1 && multi.includes(nodeId)) {
       useTaskTreeStore.setState({ selectedCanvasNodeId: nodeId });
+      setSelectedGroupId(null);
       return;
     }
     setSelectedCanvasNodeId(nodeId);
+    setSelectedGroupId(null);
   }, [setSelectedCanvasNodeId]);
 
   const applyAlign = useCallback(
@@ -583,10 +637,73 @@ export function TaskCanvas({
     [alignCanvasSelection],
   );
 
+  const selectGroupExclusive = useCallback(
+    (id: string) => {
+      setSelectedGroupId(id);
+      setSelectedCanvasNodeId(null);
+      setSelectedRelationId(null);
+      clearCanvasMultiSelect();
+    },
+    [setSelectedCanvasNodeId, setSelectedRelationId, clearCanvasMultiSelect],
+  );
+
+  const addGroupAroundSelectionOrPoint = useCallback(
+    (center: { x: number; y: number }) => {
+      const store = useTaskTreeStore.getState();
+      const selectedIds =
+        store.selectedCanvasNodeIds.length > 0
+          ? store.selectedCanvasNodeIds
+          : store.selectedCanvasNodeId
+            ? [store.selectedCanvasNodeId]
+            : [];
+      const selected = nodes.filter((n) => selectedIds.includes(n.id));
+      const wrapped = groupRectAroundNodes(selected);
+      const id = newCanvasGroupId();
+      const color = defaultGroupColor(canvasGroups.length);
+      if (wrapped) {
+        addCanvasGroup({ id, label: "Gruppe", color, ...wrapped });
+      } else {
+        addCanvasGroup({
+          id,
+          label: "Gruppe",
+          color,
+          x: center.x - DEFAULT_GROUP_WIDTH / 2,
+          y: center.y - DEFAULT_GROUP_HEIGHT / 2,
+          width: DEFAULT_GROUP_WIDTH,
+          height: DEFAULT_GROUP_HEIGHT,
+        });
+      }
+      selectGroupExclusive(id);
+    },
+    [addCanvasGroup, canvasGroups.length, nodes, selectGroupExclusive],
+  );
+
+  const fitSelectedGroup = useCallback(
+    (groupId: string) => {
+      const group = canvasGroups.find((g) => g.id === groupId);
+      if (!group) return;
+      const next = fitGroupToContents(group, nodes);
+      if (!next) return;
+      updateCanvasGroup(groupId, next);
+    },
+    [canvasGroups, nodes, updateCanvasGroup],
+  );
+
+  useEffect(() => {
+    setSelectedGroupId(null);
+  }, [contextNodeId]);
+
+  useEffect(() => {
+    if (selectedGroupId && !canvasGroups.some((g) => g.id === selectedGroupId)) {
+      setSelectedGroupId(null);
+    }
+  }, [canvasGroups, selectedGroupId]);
+
   const handleCardSelect = useCallback(
     (nodeId: string, shiftKey: boolean) => {
       if (shiftKey) {
         toggleCanvasNodeSelected(nodeId);
+        setSelectedGroupId(null);
         return;
       }
       // If the card is already part of a multi-selection, keep the selection
@@ -595,6 +712,7 @@ export function TaskCanvas({
       if (multiIds.length > 1 && multiIds.includes(nodeId)) {
         // Already in multi-select, just set as primary for detail sidebar
         useTaskTreeStore.setState({ selectedCanvasNodeId: nodeId });
+        setSelectedGroupId(null);
         return;
       }
 
@@ -608,9 +726,11 @@ export function TaskCanvas({
       if (connecting && !draft) {
         setSelectedCanvasNodeId(nodeId);
         setRelationDraftSourceId(nodeId);
+        setSelectedGroupId(null);
         return;
       }
       setSelectedCanvasNodeId(nodeId);
+      setSelectedGroupId(null);
     },
     [
       toggleCanvasNodeSelected,
@@ -638,7 +758,7 @@ export function TaskCanvas({
           moveCanvasGroupBy(op.id, op.dx, op.dy, op.members);
           break;
         case "groupResize":
-          updateCanvasGroup(op.id, { width: op.width, height: op.height });
+          updateCanvasGroup(op.id, { x: op.x, y: op.y, width: op.width, height: op.height });
           break;
         case "resize":
           resizeCanvasNode(op.nodeId, op.patch);
@@ -768,6 +888,12 @@ export function TaskCanvas({
         onCopyDrawio={() => {
           void copyCanvasToDrawio();
         }}
+        onExportMermaid={() => {
+          openMermaidExport();
+        }}
+        onImportMermaid={() => {
+          setMermaidPasteOpen(true);
+        }}
         pdfExporting={pdfExporting}
         imageExporting={imageExporting}
         drawioCopied={drawioCopied}
@@ -776,16 +902,19 @@ export function TaskCanvas({
         onAlign={(mode) => applyAlign(mode)}
         onDuplicate={() => duplicateCanvasSelection()}
         onAddGroup={() => {
-          const id = `grp-${Date.now().toString(36)}`;
-          addCanvasGroup({
-            id,
-            label: "Neue Gruppe",
-            x: 50,
-            y: 50,
-            width: 400,
-            height: 300,
-          });
-          setSelectedGroupId(id);
+          const el = shellRef.current;
+          if (!el) {
+            addGroupAroundSelectionOrPoint({ x: 250, y: 200 });
+            return;
+          }
+          const rect = el.getBoundingClientRect();
+          const world = screenToWorld(
+            canvasViewport,
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+            rect,
+          );
+          addGroupAroundSelectionOrPoint(world);
         }}
         placingSymbolType={placingSymbolType}
         symbolPaletteOpen={symbolPaletteOpen}
@@ -969,7 +1098,8 @@ export function TaskCanvas({
               group={group}
               selected={selectedGroupId === group.id}
               zoom={canvasViewport.zoom}
-              onSelect={() => setSelectedGroupId(group.id)}
+              scheme={listSchemeFromAppearance(appearance)}
+              onSelect={() => selectGroupExclusive(group.id)}
               onMoveStart={() => {
                 groupDragMembers.current[group.id] = containedNodeIds(nodes, group);
               }}
@@ -981,9 +1111,23 @@ export function TaskCanvas({
                 delete groupDragMembers.current[group.id];
                 endCanvasGeomGesture();
               }}
-              onResize={(w, h) => queueCanvasGeom({ kind: "groupResize", id: group.id, width: w, height: h })}
+              onResize={(patch) =>
+                queueCanvasGeom({ kind: "groupResize", id: group.id, ...patch })
+              }
+              onGeometryEnd={endCanvasGeomGesture}
               onLabelChange={(label) => updateCanvasGroup(group.id, { label })}
-              onRemove={() => { removeCanvasGroup(group.id); setSelectedGroupId(null); }}
+              requestLabelEdit={pendingGroupLabelEditId === group.id}
+              onLabelEditConsumed={() => setPendingGroupLabelEditId(null)}
+              onContextMenu={(e) => {
+                const el = shellRef.current;
+                if (!el) return;
+                const rect = el.getBoundingClientRect();
+                setContextMenu({
+                  x: e.clientX - rect.left,
+                  y: e.clientY - rect.top,
+                  groupId: group.id,
+                });
+              }}
             />
           ))}
 
@@ -1065,6 +1209,7 @@ export function TaskCanvas({
             }}
             onSelectRelation={(id) => {
               setSelectedRelationId(id);
+              setSelectedGroupId(null);
             }}
             onReconnectRelation={(relationId, end, newNodeId) =>
               reconnectRelation(relationId, end, newNodeId)
@@ -1086,7 +1231,78 @@ export function TaskCanvas({
             onClick={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
           >
-            {contextMenu.nodeId ? (
+            {contextMenu.groupId ? (
+              <>
+                {(() => {
+                  const menuGroup = canvasGroups.find((g) => g.id === contextMenu.groupId);
+                  const memberCount = menuGroup ? containedNodeIds(nodes, menuGroup).length : 0;
+                  return (
+                    <>
+                      <p className="px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                        Gruppe{memberCount ? ` · ${memberCount}` : ""}
+                      </p>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                        onClick={() => {
+                          selectGroupExclusive(contextMenu.groupId!);
+                          setPendingGroupLabelEditId(contextMenu.groupId!);
+                          setContextMenu(null);
+                        }}
+                      >
+                        ✎ Umbenennen
+                      </button>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100 disabled:text-slate-400"
+                        disabled={memberCount === 0}
+                        onClick={() => {
+                          fitSelectedGroup(contextMenu.groupId!);
+                          setContextMenu(null);
+                        }}
+                      >
+                        ⇲ An Inhalt anpassen
+                      </button>
+                      <div className="px-3 py-2">
+                        <p className="mb-1.5 text-[11px] font-medium text-slate-500">Farbe</p>
+                        <div className="flex flex-wrap gap-1">
+                          {GROUP_COLOR_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              title={opt.label}
+                              className={[
+                                "h-6 w-6 rounded-full border",
+                                opt.swatchClass,
+                                (menuGroup?.color ?? "slate") === opt.id
+                                  ? "ring-2 ring-sky-400"
+                                  : "border-transparent",
+                              ].join(" ")}
+                              onClick={() => {
+                                updateCanvasGroup(contextMenu.groupId!, { color: opt.id as GroupColorId });
+                                setContextMenu(null);
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <hr className="my-1 border-slate-100" />
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-red-700 hover:bg-red-50"
+                        onClick={() => {
+                          removeCanvasGroup(contextMenu.groupId!);
+                          setSelectedGroupId(null);
+                          setContextMenu(null);
+                        }}
+                      >
+                        🗑 Gruppe löschen
+                      </button>
+                    </>
+                  );
+                })()}
+              </>
+            ) : contextMenu.nodeId ? (
               <>
                 {(() => {
                   const menuNode = nodes.find((x) => x.id === contextMenu.nodeId);
@@ -1377,9 +1593,7 @@ export function TaskCanvas({
                     if (!el) { setContextMenu(null); return; }
                     const rect = el.getBoundingClientRect();
                     const world = screenToWorld(canvasViewport, contextMenu.x + rect.left, contextMenu.y + rect.top, rect);
-                    const id = `grp-${Date.now().toString(36)}`;
-                    addCanvasGroup({ id, label: "Gruppe", x: world.x - 200, y: world.y - 150, width: 400, height: 300 });
-                    setSelectedGroupId(id);
+                    addGroupAroundSelectionOrPoint(world);
                     setContextMenu(null);
                   }}
                 >
@@ -1447,14 +1661,61 @@ export function TaskCanvas({
                 >
                   {drawioCopied ? "✓ In Zwischenablage" : "📋 Nach Draw.io kopieren"}
                 </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    openMermaidExport();
+                    setContextMenu(null);
+                  }}
+                >
+                  Mermaid exportieren
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                  onClick={() => {
+                    setMermaidPasteOpen(true);
+                    setContextMenu(null);
+                  }}
+                >
+                  Mermaid einfügen
+                </button>
               </>
             )}
           </div>
         )}
       </div>
       </div>
-      <TaskDetailSidebar onOpenNoteEditor={onOpenNoteEditor} />
+      <TaskDetailSidebar
+        onOpenNoteEditor={onOpenNoteEditor}
+        selectedGroupId={selectedGroupId}
+        onClearGroupSelection={() => setSelectedGroupId(null)}
+        onFitGroupToContents={fitSelectedGroup}
+      />
       <KeyboardShortcutsHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <TextExportPreviewDialog
+        open={mermaidExportOpen}
+        title="Mermaid-Export"
+        hint="Flowchart der aktuellen Canvas-Ebene: Karten, Notizen, Ablaufplan-Symbole, Pfeile und Gruppen. Mindmaps werden beim Import wieder zu verschachtelten Karten."
+        text={mermaidExportText}
+        contentLabel="Mermaid"
+        downloadFilename="canvas.mmd"
+        downloadMime="text/plain;charset=utf-8"
+        downloadLabel=".mmd herunterladen"
+        onClose={() => setMermaidExportOpen(false)}
+      />
+      <JsonPasteImportDialog
+        open={mermaidPasteOpen}
+        title="Mermaid einfügen"
+        hint="Flowchart (flowchart/graph) oder Mindmap einfügen. Wird rechts neben den vorhandenen Karten dieser Ebene angelegt. Optional eine .mmd-Datei laden."
+        placeholder={"flowchart TD\n  Start[Los] --> Ende[Fertig]"}
+        applyLabel="Auf Canvas einfügen"
+        fileAccept=".mmd,.md,.txt,text/plain,text/markdown"
+        fileButtonLabel="Datei laden"
+        onClose={() => setMermaidPasteOpen(false)}
+        onApplyPastedText={applyMermaidImport}
+      />
     </div>
   );
 }

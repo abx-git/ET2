@@ -518,6 +518,16 @@
           },
           "description": "Abhängigkeiten zwischen Geschwister-Karten (ET2 Canvas)."
         },
+        "canvasGroups": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/CanvasGroup"
+            }
+          },
+          "description": "Optional: visuelle Gruppierungsrahmen auf dem Canvas, gruppiert nach Kontext-Ebene (`__root__` oder Knoten-ID)."
+        },
         "appearance": {
           "$ref": "#/definitions/BoardAppearance"
         }
@@ -625,6 +635,54 @@
         "organizational",
         "other"
       ]
+    },
+    "CanvasGroup": {
+      "type": "object",
+      "description": "Visueller Gruppierungsrahmen auf dem Canvas (räumliche Mitgliedschaft, kein Baum-Elternteil).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "color": {
+          "type": "string",
+          "enum": [
+            "sky",
+            "emerald",
+            "amber",
+            "violet",
+            "rose",
+            "slate"
+          ],
+          "description": "Rahmenfarbe aus der Gruppen-Palette."
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "additionalProperties": false
     },
     "TaskRelation": {
       "type": "object",

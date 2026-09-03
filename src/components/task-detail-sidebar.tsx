@@ -5,9 +5,16 @@ import { useEffect, useMemo, useState } from "react";
 
 import { NoteMarkdownContent } from "@/components/note-markdown-content";
 import { CardIconBadge } from "@/components/card-icon-badge";
+import { contextChildren } from "@/lib/board-context";
 import { mergeCardFieldVisibility } from "@/lib/card-field-visibility";
 import { CARD_COLOR_OPTIONS, type CardColorId } from "@/lib/card-color";
 import { CARD_ICON_OPTIONS, type CardIconId } from "@/lib/card-icon";
+import {
+  containedNodeIds,
+  GROUP_COLOR_OPTIONS,
+  parseGroupColor,
+  type GroupColorId,
+} from "@/lib/canvas-group";
 import { fromInputDateTimeLocal, toInputDateTimeLocal } from "@/lib/task-datetime";
 import {
   EFFORT_UNIT_LABELS,
@@ -49,11 +56,19 @@ function splitTagInput(raw: string): string[] {
 
 export function TaskDetailSidebar({
   onOpenNoteEditor,
+  selectedGroupId = null,
+  onClearGroupSelection,
+  onFitGroupToContents,
 }: {
   onOpenNoteEditor?: (nodeId: string) => void;
+  selectedGroupId?: string | null;
+  onClearGroupSelection?: () => void;
+  onFitGroupToContents?: (groupId: string) => void;
 } = {}) {
   const roots = useTaskTreeStore((s) => s.roots);
   const relations = useTaskTreeStore((s) => s.relations);
+  const contextNodeId = useTaskTreeStore((s) => s.contextNodeId);
+  const canvasGroups = useTaskTreeStore((s) => s.canvasGroups);
   const selectedCanvasNodeId = useTaskTreeStore((s) => s.selectedCanvasNodeId);
   const selectedRelationId = useTaskTreeStore((s) => s.selectedRelationId);
   const setSelectedCanvasNodeId = useTaskTreeStore((s) => s.setSelectedCanvasNodeId);
@@ -63,6 +78,8 @@ export function TaskDetailSidebar({
   const updateRelation = useTaskTreeStore((s) => s.updateRelation);
   const disconnectRelation = useTaskTreeStore((s) => s.disconnectRelation);
   const removeCard = useTaskTreeStore((s) => s.removeCard);
+  const removeCanvasGroup = useTaskTreeStore((s) => s.removeCanvasGroup);
+  const updateCanvasGroup = useTaskTreeStore((s) => s.updateCanvasGroup);
   const reorderCanvasNodeZIndex = useTaskTreeStore((s) => s.reorderCanvasNodeZIndex);
   const drillIntoNode = useTaskTreeStore((s) => s.drillIntoNode);
   const cardFieldVisibility = useTaskTreeStore((s) => s.cardFieldVisibility);
@@ -74,6 +91,14 @@ export function TaskDetailSidebar({
   const relation = selectedRelationId
     ? relations.find((r) => r.id === selectedRelationId) ?? null
     : null;
+  const group = selectedGroupId
+    ? (canvasGroups[contextNodeId ?? "__root__"] ?? []).find((g) => g.id === selectedGroupId) ?? null
+    : null;
+  const groupMembers = useMemo(() => {
+    if (!group) return [];
+    const siblings = contextChildren(roots, contextNodeId, { includeSymbols: true });
+    return containedNodeIds(siblings, group);
+  }, [group, roots, contextNodeId]);
 
   const [tagDraft, setTagDraft] = useState("");
   const [idCopied, setIdCopied] = useState(false);
@@ -89,7 +114,7 @@ export function TaskDetailSidebar({
     [allTags, node],
   );
 
-  const empty = !node && !relation;
+  const empty = !node && !relation && !group;
 
   return (
     <aside
@@ -98,13 +123,14 @@ export function TaskDetailSidebar({
     >
       <div className="flex shrink-0 items-center justify-between border-b border-[var(--border)] px-3 py-2.5">
         <h2 className="text-sm font-semibold text-[var(--text)]">Details</h2>
-        {(node || relation) && (
+        {(node || relation || group) && (
           <button
             type="button"
             className="rounded px-1.5 py-0.5 text-[11px] text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             onClick={() => {
               setSelectedCanvasNodeId(null);
               setSelectedRelationId(null);
+              onClearGroupSelection?.();
             }}
           >
             Auswahl aufheben
@@ -115,8 +141,76 @@ export function TaskDetailSidebar({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
         {empty ? (
           <p className="text-xs leading-relaxed text-slate-500">
-            Karte oder Pfeil auf dem Canvas auswählen, um Details zu bearbeiten.
+            Karte, Pfeil oder Gruppe auf dem Canvas auswählen, um Details zu bearbeiten.
           </p>
+        ) : null}
+
+        {group && !node && !relation ? (
+          <div className="space-y-3">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Gruppe</p>
+            <div>
+              <label className={labelClass} htmlFor="et2-group-label">
+                Name
+              </label>
+              <input
+                id="et2-group-label"
+                className={fieldClass}
+                value={group.label}
+                onChange={(e) => updateCanvasGroup(group.id, { label: e.target.value })}
+                placeholder="Gruppe"
+              />
+            </div>
+            <div>
+              <span className={labelClass}>Farbe</span>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {GROUP_COLOR_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    title={opt.label}
+                    className={[
+                      "h-6 w-6 rounded-full border",
+                      opt.swatchClass,
+                      (parseGroupColor(group.color) ?? "slate") === opt.id
+                        ? "ring-2 ring-sky-400"
+                        : "border-transparent",
+                    ].join(" ")}
+                    onClick={() => updateCanvasGroup(group.id, { color: opt.id as GroupColorId })}
+                  />
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">
+              {groupMembers.length === 0
+                ? "Keine Karten vollständig im Rahmen."
+                : groupMembers.length === 1
+                  ? "1 Karte im Rahmen — wird beim Verschieben mitgenommen."
+                  : `${groupMembers.length} Karten im Rahmen — werden beim Verschieben mitgenommen.`}
+            </p>
+            <p className="text-[11px] leading-relaxed text-slate-400">
+              Der Rahmen ist ein grafisches Element. Größe ändern verschiebt die Karten nicht.
+              Entf entfernt nur den Rahmen.
+            </p>
+            <button
+              type="button"
+              className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
+              disabled={groupMembers.length === 0}
+              onClick={() => onFitGroupToContents?.(group.id)}
+            >
+              An Inhalt anpassen
+            </button>
+            <button
+              type="button"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-red-200 bg-white px-2 py-1.5 text-sm text-red-700 hover:bg-red-50"
+              onClick={() => {
+                removeCanvasGroup(group.id);
+                onClearGroupSelection?.();
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              Gruppe löschen
+            </button>
+          </div>
         ) : null}
 
         {relation && !node ? (

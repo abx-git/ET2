@@ -26,6 +26,7 @@ import {
   SquareDashed,
   StretchHorizontal,
   StretchVertical,
+  Upload,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
@@ -60,6 +61,8 @@ export interface CanvasToolbarProps {
   onExportPng: () => void;
   onExportSvg: () => void;
   onCopyDrawio: () => void;
+  onExportMermaid: () => void;
+  onImportMermaid: () => void;
   pdfExporting: boolean;
   imageExporting: "png" | "svg" | null;
   drawioCopied: boolean;
@@ -142,6 +145,8 @@ export function CanvasToolbar({
   onExportPng,
   onExportSvg,
   onCopyDrawio,
+  onExportMermaid,
+  onImportMermaid,
   pdfExporting,
   imageExporting,
   drawioCopied,
@@ -291,7 +296,7 @@ export function CanvasToolbar({
       <button
         type="button"
         className={btnClass}
-        title="Gruppierungs-Box anlegen"
+        title="Gruppe: Rahmen um ausgewählte Karten, sonst in der Ansicht"
         aria-label="Gruppe anlegen"
         onClick={onAddGroup}
       >
@@ -461,6 +466,30 @@ export function CanvasToolbar({
           >
             <FileCode2 className={iconClass} aria-hidden />
             {imageExporting === "svg" ? "SVG…" : "SVG (Draw.io)"}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={menuItemClass}
+            onClick={() => {
+              closeMenus();
+              onExportMermaid();
+            }}
+          >
+            <FileCode2 className={iconClass} aria-hidden />
+            Mermaid exportieren
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={menuItemClass}
+            onClick={() => {
+              closeMenus();
+              onImportMermaid();
+            }}
+          >
+            <Upload className={iconClass} aria-hidden />
+            Mermaid einfügen
           </button>
           <button
             type="button"

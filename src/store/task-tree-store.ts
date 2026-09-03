@@ -1,10 +1,7 @@
 import { create } from "zustand";
 import { temporal } from "zundo";
 
-import {
-  contextChildren,
-  contextIdForRevealingNode,
-} from "@/lib/board-context";
+import { contextChildren, contextIdForRevealingNode } from "@/lib/board-context";
 import {
   DEFAULT_PANE_CONTEXTS,
   normalizePaneContexts,
@@ -86,14 +83,22 @@ import {
 } from "@/lib/task-relations";
 import {
   ensureCanvasLayout,
+  nodeHasCanvasPosition,
   replaceSiblingsInForest,
 } from "@/lib/canvas-layout";
+import { taskCardRect } from "@/lib/connector-geometry";
+import {
+  offsetMermaidImport,
+  parseMermaidToCanvas,
+  remapMermaidImport,
+} from "@/lib/canvas-mermaid";
 import {
   DEFAULT_CANVAS_VIEWPORT,
   snapToGrid,
   type CanvasViewport,
 } from "@/lib/canvas-viewport";
 import type { CanvasGroup } from "@/lib/canvas-group";
+import { defaultGroupColor, parseCanvasGroupsMap, parseGroupColor } from "@/lib/canvas-group";
 import { applyGeometryPatches, computeAlignPatches, type AlignMode } from "@/lib/element-align";
 import { duplicateCanvasNodes } from "@/lib/canvas-duplicate";
 import {
@@ -153,6 +158,7 @@ export type BoardImportReplacePayload = {
   clipboardRoots?: TaskNode[];
   relations?: TaskRelation[];
   appearance?: BoardAppearance;
+  canvasGroups?: Record<string, CanvasGroup[]>;
 };
 
 function partializeBoardHistory(state: TaskTreeState): BoardHistorySlice {
@@ -467,6 +473,16 @@ export interface TaskTreeState {
     parentId: string | null,
     cards: { title: string; description: string }[],
   ) => string[];
+  /**
+   * Mermaid-Flowchart oder -Mindmap in die aktuelle Canvas-Ebene einfügen.
+   * Ein Undo-Schritt.
+   */
+  importCanvasMermaid: (source: string) => {
+    kind: "flowchart" | "mindmap";
+    nodeIds: string[];
+    relationCount: number;
+    groupCount: number;
+  };
 }
 
 function insertNodeAtIndex(
@@ -556,6 +572,7 @@ function importedBoardContentFromPayload(payload: BoardImportReplacePayload): {
   clipboardRoots: TaskNode[];
   relations: TaskRelation[];
   appearance: BoardAppearance;
+  canvasGroups: Record<string, CanvasGroup[]>;
 } {
   const { roots } = payload;
   const pathIds = normalizePathIds(roots, payload.pathIds);
@@ -609,6 +626,7 @@ function importedBoardContentFromPayload(payload: BoardImportReplacePayload): {
     clipboardRoots: payload.clipboardRoots ?? [],
     relations: sanitizeRelations(roots, payload.relations ?? []),
     appearance: normalizeAppearance(payload.appearance ?? DEFAULT_APPEARANCE),
+    canvasGroups: parseCanvasGroupsMap(payload.canvasGroups ?? {}),
   };
 }
 
@@ -1262,14 +1280,21 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     const key = get().contextNodeId ?? "__root__";
     const prev = get().canvasGroups;
     const list = prev[key] ?? [];
-    set({ canvasGroups: { ...prev, [key]: [...list, group] } });
+    const color = parseGroupColor(group.color) ?? defaultGroupColor(list.length);
+    set({ canvasGroups: { ...prev, [key]: [...list, { ...group, color }] } });
   },
 
   updateCanvasGroup: (id, patch) => {
     const key = get().contextNodeId ?? "__root__";
     const prev = get().canvasGroups;
     const list = prev[key] ?? [];
-    set({ canvasGroups: { ...prev, [key]: list.map((g) => g.id === id ? { ...g, ...patch } : g) } });
+    const nextPatch = { ...patch };
+    if ("color" in nextPatch) {
+      const parsed = parseGroupColor(nextPatch.color);
+      if (parsed) nextPatch.color = parsed;
+      else delete nextPatch.color;
+    }
+    set({ canvasGroups: { ...prev, [key]: list.map((g) => (g.id === id ? { ...g, ...nextPatch } : g)) } });
     pauseBoardHistoryAfterFirstGeometryChange();
   },
 
@@ -1673,7 +1698,6 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     set({
       ...content,
       ...syncActiveContext({ ...DEFAULT_PANE_CONTEXTS }, "left"),
-      canvasGroups: {},
       selectedRelationId: null,
       selectedCanvasNodeId: null,
       selectedCanvasNodeIds: [] as string[],
@@ -1707,7 +1731,10 @@ export const useTaskTreeStore = create<TaskTreeState>()(
         ...content,
         pathIds,
         ...syncActiveContext(contextByPane, s.activePane),
-        canvasGroups: preserveCanvasGroupsForRoots(s.canvasGroups, roots),
+        canvasGroups:
+          payload.canvasGroups !== undefined
+            ? preserveCanvasGroupsForRoots(content.canvasGroups, roots)
+            : preserveCanvasGroupsForRoots(s.canvasGroups, roots),
         selectedRelationId,
         selectedCanvasNodeId,
         selectedCanvasNodeIds,
@@ -1794,6 +1821,78 @@ export const useTaskTreeStore = create<TaskTreeState>()(
       return { roots: refreshed, pathIds: normalizePathIds(refreshed, s.pathIds) };
     });
     return createdIds;
+  },
+
+  importCanvasMermaid: (source) => {
+    let parsed = parseMermaidToCanvas(source);
+    const state = get();
+    const parentId = state.contextNodeId;
+    const siblings = contextChildren(state.roots, parentId, { includeSymbols: true });
+    const placed = siblings.filter(nodeHasCanvasPosition);
+    if (placed.length > 0) {
+      let maxRight = 0;
+      for (const n of placed) {
+        const r = taskCardRect(n);
+        maxRight = Math.max(maxRight, r.x + r.w);
+      }
+      const minX = Math.min(...parsed.nodes.map((n) => n.x ?? 80), 80);
+      parsed = offsetMermaidImport(parsed, maxRight + 80 - minX, 0);
+    }
+    const taken = collectAllNodeIds([...state.roots, ...state.clipboardRoots]);
+    parsed = remapMermaidImport(parsed, taken);
+    const nodeIds = parsed.nodes.map((n) => n.id);
+    set((s) => {
+      let nextRoots = s.roots;
+      let index = getSiblingsList(nextRoots, parentId).length;
+      for (const node of parsed.nodes) {
+        nextRoots = insertUnderParent(nextRoots, parentId, index, node);
+        index += 1;
+      }
+      let relations = s.relations ?? [];
+      for (const r of parsed.relations) {
+        if (!canConnectSiblings(nextRoots, r.sourceId, r.targetId)) continue;
+        if (relations.some((x) => x.sourceId === r.sourceId && x.targetId === r.targetId)) continue;
+        relations = [
+          ...relations,
+          {
+            id: createRelationId(relations),
+            sourceId: r.sourceId,
+            targetId: r.targetId,
+            type: r.type,
+            ...(r.label ? { label: r.label } : {}),
+          },
+        ];
+      }
+      const key = parentId ?? "__root__";
+      const prevGroups = s.canvasGroups;
+      const list = [...(prevGroups[key] ?? [])];
+      for (const g of parsed.groups) {
+        list.push({
+          id: `grp-${Date.now().toString(36)}-${list.length.toString(36)}`,
+          label: g.label,
+          x: g.x,
+          y: g.y,
+          width: g.width,
+          height: g.height,
+          color: defaultGroupColor(list.length),
+        });
+      }
+      return {
+        roots: refreshCalculatedEffortsInTree(nextRoots, s.completedTag),
+        pathIds: normalizePathIds(nextRoots, s.pathIds),
+        relations: sanitizeRelations(nextRoots, relations),
+        canvasGroups: { ...prevGroups, [key]: list },
+        selectedCanvasNodeIds: nodeIds,
+        selectedCanvasNodeId: nodeIds.length === 1 ? nodeIds[0]! : null,
+        selectedRelationId: null,
+      };
+    });
+    return {
+      kind: parsed.kind,
+      nodeIds,
+      relationCount: parsed.relations.length,
+      groupCount: parsed.groups.length,
+    };
   },
     }),
     {
