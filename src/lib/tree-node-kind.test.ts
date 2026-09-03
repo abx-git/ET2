@@ -23,6 +23,8 @@ describe("tree-node-kind", () => {
     expect(isCardNode(sym)).toBe(false);
     expect(isNoteNode(sym)).toBe(false);
     expect(isCardNode({ kind: "card" } as never)).toBe(true);
+    const entity = createBlankSymbolNode("e-1", "entity");
+    expect(entity.entityAttributes?.[0]).toMatchObject({ name: "id", key: "pk" });
   });
 
   it("leitet Anzeigetitel aus Markdown ab", () => {

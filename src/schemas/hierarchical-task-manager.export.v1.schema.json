@@ -48,9 +48,31 @@
         "process",
         "decision",
         "terminator",
-        "document"
+        "document",
+        "entity"
       ],
-      "description": "Canvas-only Ablaufplan-/Use-Case-Form."
+      "description": "Canvas-only Ablaufplan-/Use-Case-/ERM-Form."
+    },
+    "EntityAttribute": {
+      "type": "object",
+      "description": "Attribut eines ERM-Objekts (Tabellenzeile).",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "description": "Optionaler Datentyp (frei)."
+        },
+        "key": {
+          "type": "string",
+          "enum": ["pk", "fk"],
+          "description": "Primär- oder Fremdschlüssel."
+        }
+      },
+      "required": ["name"],
+      "additionalProperties": false
     },
     "SymbolTaskNodeJson": {
       "type": "object",
@@ -70,6 +92,13 @@
         },
         "title": {
           "type": "string"
+        },
+        "entityAttributes": {
+          "type": "array",
+          "description": "Attribute eines ERM-Objekts (`symbolType: \"entity\"`).",
+          "items": {
+            "$ref": "#/definitions/EntityAttribute"
+          }
         },
         "children": {
           "type": "array",

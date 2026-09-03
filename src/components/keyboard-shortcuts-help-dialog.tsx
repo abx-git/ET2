@@ -106,6 +106,7 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
         { keys: "Ziehen (Gruppe, Titelzeile)", description: "Rahmen samt enthaltenen Karten verschieben" },
         { keys: "Ecken / Kanten (Gruppe)", description: "Rahmengröße ändern (Karten bleiben stehen)" },
         { keys: "Rechtsklick (Gruppe)", description: "Gruppe umbenennen, Farbe, an Inhalt anpassen, löschen" },
+        { keys: "Symbole · Datenmodell", description: "Objekt als Tabelle mit Attributen; Pfeile für Beziehungen (z. B. 1, n)" },
         { keys: "Export-Menü", description: "Mermaid importieren oder exportieren (Flowchart / Mindmap der Ebene)" },
       ],
     },

@@ -67,6 +67,30 @@ describe("buildCanvasSvg", () => {
     expect(svg).toContain("<polygon ");
   });
 
+  it("renders an ERM entity as a table", () => {
+    const svg = buildCanvasSvg({
+      nodes: [
+        card("e", "Kunde", {
+          kind: "symbol",
+          symbolType: "entity",
+          entityAttributes: [
+            { name: "id", key: "pk" },
+            { name: "name", type: "text" },
+          ],
+          x: 40,
+          y: 40,
+          width: 200,
+          height: 140,
+        }),
+      ],
+    });
+    expect(svg).toContain('data-et2-symbol="entity"');
+    expect(svg).toContain(">Kunde</text>");
+    expect(svg).toContain(">PK</text>");
+    expect(svg).toContain(">id</text>");
+    expect(svg).toContain(">name</text>");
+  });
+
   it("includes groups behind cards", () => {
     const groups: CanvasGroup[] = [
       { id: "g1", label: "Sprint", x: 20, y: 20, width: 400, height: 300, color: "bg-sky-50/60 border-sky-300" },

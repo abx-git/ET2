@@ -1,6 +1,7 @@
 import type { CardColorId } from "@/lib/card-color";
 import type { CardIconId } from "@/lib/card-icon";
 import type { SymbolType } from "@/lib/diagram-symbol";
+import type { EntityAttribute } from "@/lib/entity-attribute";
 import type { EffortSource, EffortUnit } from "@/lib/task-effort";
 import type { TreeNodeKind } from "@/lib/tree-node-kind";
 
@@ -12,7 +13,7 @@ import type { TreeNodeKind } from "@/lib/tree-node-kind";
  * `effortSource`: `manual` (eingetragen) oder `calculated` (Summe offener Kinder, per Knopf).
  * `tags` sind freie Schlagworte; das Tag „Erledigt“ (Groß-/Kleinschreibung egal) steuert Filter und Darstellung.
  * `kind: "note"` = Markdown-Notiz ohne Karten-Attribute (nur Titel + Markdown-Inhalt).
- * `kind: "symbol"` = Canvas-only Ablaufplan-/Use-Case-Symbol (`symbolType`); nicht in Liste/Outline.
+ * `kind: "symbol"` = Canvas-only Ablaufplan-/Use-Case-/ERM-Symbol (`symbolType`); nicht in Liste/Outline.
  */
 export interface TaskNode {
   id: string;
@@ -20,6 +21,8 @@ export interface TaskNode {
   kind?: TreeNodeKind;
   /** Form bei `kind: "symbol"`. */
   symbolType?: SymbolType;
+  /** Attribute eines ERM-Objekts (`symbolType: "entity"`). */
+  entityAttributes?: EntityAttribute[];
   title: string;
   /** Markdown-Inhalt (nur bei `kind: "note"`). */
   markdown?: string;

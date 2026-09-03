@@ -113,6 +113,17 @@ flowchart LR
     expect(back.relations.some((r) => r.label === "weiter")).toBe(true);
   });
 
+  it("roundtrips ERM entity class", () => {
+    const nodes: TaskNode[] = [
+      card("e1", "Kunde", { kind: "symbol", symbolType: "entity", x: 0, y: 0, width: 200, height: 140 }),
+    ];
+    const mermaid = exportCanvasAsMermaid(nodes, []);
+    expect(mermaid).toContain("et2-symbol-entity");
+    const back = parseMermaidToCanvas(mermaid);
+    expect(back.nodes[0]?.symbolType).toBe("entity");
+    expect(back.nodes[0]?.title).toBe("Kunde");
+  });
+
   it("imports a mindmap as nested cards", () => {
     const src = `
 mindmap

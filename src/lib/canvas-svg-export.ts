@@ -7,6 +7,11 @@ import { APP_VERSION } from "@/lib/app-version";
 import { groupColorExport, type CanvasGroup } from "@/lib/canvas-group";
 import { compareCanvasStackOrder } from "@/lib/canvas-stack";
 import type { CardColorId } from "@/lib/card-color";
+import {
+  entityAttributeBadge,
+  isEntitySymbol,
+  type EntityAttribute,
+} from "@/lib/entity-attribute";
 import { DEFAULT_NOTE_ACCENT, noteAccentPalette, type NoteAccentId } from "@/lib/note-accent";
 import { relationAnchors, taskCardRect, type ElementRect } from "@/lib/connector-geometry";
 import { relationStroke } from "@/lib/task-relations";
@@ -290,6 +295,9 @@ function renderSymbolShape(node: TaskNode, rect: ElementRect): string {
 function renderSymbol(node: TaskNode): string {
   const rect = taskCardRect(node);
   const type = node.symbolType ?? "process";
+  if (isEntitySymbol(node)) {
+    return renderEntityTable(node, rect);
+  }
   const title = nodeDisplayTitle(node);
   const titleOnShape = type !== "actor";
   const innerW = rect.w - 16;
@@ -311,6 +319,42 @@ function renderSymbol(node: TaskNode): string {
   return `<g data-et2-id="${xmlEscape(node.id)}" data-et2-kind="symbol" data-et2-symbol="${xmlEscape(type)}"${rotateAttr(node, rect)}>
   ${renderSymbolShape(node, rect)}
   ${titleSvg}
+</g>`;
+}
+
+function renderEntityTable(node: TaskNode, rect: ElementRect): string {
+  const title = node.title.trim() || "Objekt";
+  const attrs: EntityAttribute[] = node.entityAttributes ?? [];
+  const headerH = 28;
+  const rowH = 20;
+  const titleSvg = svgTextLines([title], rect.x + rect.w / 2, rect.y + 18, 12, "#0f172a", {
+    weight: 700,
+    anchor: "middle",
+  });
+  const rows = attrs
+    .map((attr, i) => {
+      const y = rect.y + headerH + 14 + i * rowH;
+      const badge = entityAttributeBadge(attr);
+      const badgeSvg = badge
+        ? `<text x="${num(rect.x + 8)}" y="${num(y)}" font-family="${FONT}" font-size="9" font-weight="700" fill="${attr.key === "pk" ? "#0369a1" : "#6d28d9"}">${xmlEscape(badge)}</text>`
+        : "";
+      const nameSvg = `<text x="${num(rect.x + 28)}" y="${num(y)}" font-family="${FONT}" font-size="11" font-weight="${attr.key === "pk" ? 600 : 400}" fill="#0f172a">${xmlEscape(attr.name)}</text>`;
+      const typeSvg = attr.type
+        ? `<text x="${num(rect.x + rect.w - 8)}" y="${num(y)}" text-anchor="end" font-family="${FONT}" font-size="10" fill="#94a3b8">${xmlEscape(attr.type)}</text>`
+        : "";
+      const divider =
+        i < attrs.length - 1
+          ? `<line x1="${num(rect.x + 1)}" y1="${num(rect.y + headerH + (i + 1) * rowH)}" x2="${num(rect.x + rect.w - 1)}" y2="${num(rect.y + headerH + (i + 1) * rowH)}" stroke="#e2e8f0" stroke-width="1"/>`
+          : "";
+      return `${badgeSvg}${nameSvg}${typeSvg}${divider}`;
+    })
+    .join("");
+  return `<g data-et2-id="${xmlEscape(node.id)}" data-et2-kind="symbol" data-et2-symbol="entity"${rotateAttr(node, rect)}>
+  <rect x="${num(rect.x)}" y="${num(rect.y)}" width="${num(rect.w)}" height="${num(rect.h)}" fill="#ffffff" stroke="#334155" stroke-width="1.5"/>
+  <rect x="${num(rect.x)}" y="${num(rect.y)}" width="${num(rect.w)}" height="${headerH}" fill="#f1f5f9" stroke="none"/>
+  <line x1="${num(rect.x)}" y1="${num(rect.y + headerH)}" x2="${num(rect.x + rect.w)}" y2="${num(rect.y + headerH)}" stroke="#334155" stroke-width="1.5"/>
+  ${titleSvg}
+  ${rows}
 </g>`;
 }
 

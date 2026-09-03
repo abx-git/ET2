@@ -30,6 +30,7 @@ import { generateUniqueTaskIdFromTaken } from "@/lib/task-id";
 import { normalizeTaskCommand } from "@/lib/task-command";
 import { normalizeTaskLink } from "@/lib/task-link";
 import { isSymbolType, type SymbolType } from "@/lib/diagram-symbol";
+import { normalizeEntityAttributes, type EntityAttribute } from "@/lib/entity-attribute";
 import { isNoteNode, isSymbolNode, normalizeNoteMarkdown } from "@/lib/tree-node-kind";
 import type { TaskNode } from "@/types/task-node";
 import type { TaskRelation } from "@/types/task-relation";
@@ -108,6 +109,8 @@ export interface TaskNodeJson {
   kind?: "card" | "note" | "symbol";
   /** Form bei `kind: "symbol"`. */
   symbolType?: SymbolType;
+  /** Attribute eines ERM-Objekts (`symbolType: "entity"`). */
+  entityAttributes?: EntityAttribute[];
   title: string;
   markdown?: string;
   link?: string;
@@ -218,11 +221,13 @@ export function taskNodeToJson(node: TaskNode): TaskNodeJson {
     };
   }
   if (isSymbolNode(node) && node.symbolType) {
+    const attrs = node.symbolType === "entity" ? normalizeEntityAttributes(node.entityAttributes) : [];
     return {
       id: node.id,
       kind: "symbol",
       symbolType: node.symbolType,
       title: node.title,
+      ...(attrs.length > 0 ? { entityAttributes: attrs } : {}),
       ...canvasLayoutToJson(node),
       children: node.children.map(taskNodeToJson),
     };
@@ -273,6 +278,9 @@ export function taskNodeFromJson(j: TaskNodeJson): TaskNode {
       kind: "symbol",
       symbolType,
       title: j.title,
+      ...(symbolType === "entity"
+        ? { entityAttributes: normalizeEntityAttributes(j.entityAttributes) }
+        : {}),
       link: "",
       description: "",
       tags: [],
@@ -462,6 +470,9 @@ function expectTaskNodeJson(raw: unknown, path: string): TaskNodeJson {
       kind: "symbol",
       symbolType: symbolTypeRaw,
       title,
+      ...(symbolTypeRaw === "entity"
+        ? { entityAttributes: normalizeEntityAttributes(o.entityAttributes) }
+        : {}),
       ...layoutJson,
       children: children.map((ch, i) => expectTaskNodeJson(ch, `${path}.children[${i}]`)),
     };

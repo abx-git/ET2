@@ -109,6 +109,40 @@ describe("task-tree-json", () => {
     expect(back.x).toBe(40);
   });
 
+  it("roundtrips ERM entity attributes", () => {
+    const entity: TaskNode = {
+      id: "ent-1",
+      kind: "symbol",
+      symbolType: "entity",
+      title: "Kunde",
+      entityAttributes: [
+        { name: "id", key: "pk" },
+        { name: "name", type: "text" },
+        { name: "stadt_id", key: "fk" },
+      ],
+      link: "",
+      description: "",
+      tags: [],
+      dueDate: null,
+      reminderDate: null,
+      effort: 0,
+      x: 10,
+      y: 20,
+      width: 200,
+      height: 140,
+      children: [],
+    };
+    const json = taskNodeToJson(entity);
+    expect(json.entityAttributes).toEqual([
+      { name: "id", key: "pk" },
+      { name: "name", type: "text" },
+      { name: "stadt_id", key: "fk" },
+    ]);
+    const back = taskNodeFromJson(json);
+    expect(back.symbolType).toBe("entity");
+    expect(back.entityAttributes).toEqual(json.entityAttributes);
+  });
+
   it("rejects invalid symbolType", () => {
     expect(() =>
       parseExportedDocument(

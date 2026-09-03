@@ -36,6 +36,14 @@ import {
 } from "@/lib/task-tags";
 import { isCardNode, isNoteNode, isSymbolNode } from "@/lib/tree-node-kind";
 import { getSymbolTypeDefinition } from "@/lib/diagram-symbol";
+import type { EntityAttribute } from "@/lib/entity-attribute";
+import {
+  entityTableMinHeight,
+  entityTableMinWidth,
+  isEntitySymbol,
+  parseEntityAttributesText,
+  serializeEntityAttributes,
+} from "@/lib/entity-attribute";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import {
   TASK_RELATION_TYPE_LABELS,
@@ -46,6 +54,60 @@ import {
 const fieldClass =
   "mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 outline-none ring-sky-500/25 placeholder:text-slate-400 focus:border-sky-300 focus:ring-2";
 const labelClass = "block text-[11px] font-medium text-slate-500";
+
+function EntityAttributesField({
+  nodeId,
+  attributes,
+  width,
+  height,
+}: {
+  nodeId: string;
+  attributes: EntityAttribute[] | undefined;
+  width?: number;
+  height?: number;
+}) {
+  const updateCard = useTaskTreeStore((s) => s.updateCard);
+  const serialized = serializeEntityAttributes(attributes ?? []);
+  const [draft, setDraft] = useState(serialized);
+
+  useEffect(() => {
+    setDraft(serialized);
+  }, [nodeId, serialized]);
+
+  const commit = () => {
+    const next = parseEntityAttributesText(draft);
+    const minH = entityTableMinHeight(next);
+    const minW = entityTableMinWidth();
+    updateCard(nodeId, {
+      entityAttributes: next,
+      ...((height ?? 0) < minH ? { height: minH } : {}),
+      ...((width ?? 0) < minW ? { width: minW } : {}),
+    });
+    setDraft(serializeEntityAttributes(next));
+  };
+
+  return (
+    <div>
+      <label className={labelClass} htmlFor="et2-entity-attrs">
+        Attribute
+      </label>
+      <textarea
+        id="et2-entity-attrs"
+        className={`${fieldClass} min-h-[7.5rem] font-mono text-[11px] leading-5`}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        spellCheck={false}
+        placeholder={"* id\nname : text\n~ kunden_id"}
+      />
+      <p className="mt-1 text-[11px] text-slate-400">
+        Eine Zeile pro Attribut. <span className="font-mono">*</span> oder PK für Schlüssel,{" "}
+        <span className="font-mono">~</span> oder FK für Fremdschlüssel, optional „: Typ“. Objekte mit dem
+        Verbindungswerkzeug verknüpfen; Pfeilbeschriftung z. B. 1 oder n.
+      </p>
+    </div>
+  );
+}
 
 function splitTagInput(raw: string): string[] {
   return raw
@@ -357,7 +419,7 @@ export function TaskDetailSidebar({
             </div>
             <div>
               <label className={labelClass} htmlFor="et2-symbol-title">
-                Beschriftung
+                {isEntitySymbol(node) ? "Objektname" : "Beschriftung"}
               </label>
               <input
                 id="et2-symbol-title"
@@ -366,6 +428,14 @@ export function TaskDetailSidebar({
                 onChange={(e) => updateCard(node.id, { title: e.target.value })}
               />
             </div>
+            {isEntitySymbol(node) ? (
+              <EntityAttributesField
+                nodeId={node.id}
+                attributes={node.entityAttributes}
+                width={node.width}
+                height={node.height}
+              />
+            ) : null}
             <div>
               <p className={labelClass}>Ebene</p>
               <div className="mt-1 grid grid-cols-2 gap-1.5">

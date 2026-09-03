@@ -83,6 +83,7 @@ const CLASS_KIND: Record<string, { kind: "card" | "note" | "symbol"; symbolType?
   "et2-symbol-actor": { kind: "symbol", symbolType: "actor" },
   "et2-symbol-usecase": { kind: "symbol", symbolType: "useCase" },
   "et2-symbol-systemboundary": { kind: "symbol", symbolType: "systemBoundary" },
+  "et2-symbol-entity": { kind: "symbol", symbolType: "entity" },
 };
 
 const GAP_X = 72;

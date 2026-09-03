@@ -3,6 +3,7 @@ import {
   defaultSymbolZIndex,
   type SymbolType,
 } from "@/lib/diagram-symbol";
+import { DEFAULT_ENTITY_ATTRIBUTES } from "@/lib/entity-attribute";
 import type { TaskNode } from "@/types/task-node";
 
 export type TreeNodeKind = "card" | "note" | "symbol";
@@ -111,6 +112,7 @@ export function createBlankSymbolNode(id: string, symbolType: SymbolType): TaskN
     width: def.defaultWidth,
     height: def.defaultHeight,
     zIndex: defaultSymbolZIndex(symbolType),
+    ...(symbolType === "entity" ? { entityAttributes: [...DEFAULT_ENTITY_ATTRIBUTES] } : {}),
     children: [],
   };
 }

@@ -39,6 +39,7 @@ export function updateNodeFields(
       | "effortSource"
       | "cardColor"
       | "cardIcon"
+      | "entityAttributes"
       | "x"
       | "y"
       | "width"

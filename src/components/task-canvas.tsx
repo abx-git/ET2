@@ -48,6 +48,8 @@ import {
   defaultSymbolSize,
   listSymbolTypesByGroup,
   SYMBOL_GROUP_LABELS,
+  SYMBOL_GROUPS,
+  type SymbolGroup,
   type SymbolType,
 } from "@/lib/diagram-symbol";
 import { exportVisibleCanvasToPdf } from "@/lib/canvas-pdf-export";
@@ -191,7 +193,7 @@ export function TaskCanvas({
   const [nestHoverId, setNestHoverId] = useState<string | null>(null);
   const [symbolPaletteOpen, setSymbolPaletteOpen] = useState(false);
   const [placingSymbolType, setPlacingSymbolType] = useState<SymbolType | null>(null);
-  const [contextSymbolGroup, setContextSymbolGroup] = useState<"useCase" | "flowchart" | null>(null);
+  const [contextSymbolGroup, setContextSymbolGroup] = useState<SymbolGroup | null>(null);
   const [pdfExporting, setPdfExporting] = useState(false);
   const [imageExporting, setImageExporting] = useState<"png" | "svg" | null>(null);
   const [drawioCopied, setDrawioCopied] = useState(false);
@@ -1521,70 +1523,40 @@ export function TaskCanvas({
                 >
                   + Neue Notiz
                 </button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
-                    onClick={() =>
-                      setContextSymbolGroup((g) => (g === "useCase" ? null : "useCase"))
-                    }
-                  >
-                    <span>+ Use Case</span>
-                    <span className="text-slate-400">{contextSymbolGroup === "useCase" ? "▾" : "▸"}</span>
-                  </button>
-                  {contextSymbolGroup === "useCase"
-                    ? listSymbolTypesByGroup("useCase").map((def) => (
-                        <button
-                          key={def.id}
-                          type="button"
-                          className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 pl-6 text-left text-sm text-slate-700 hover:bg-slate-100"
-                          onClick={() => {
-                            const el = shellRef.current;
-                            if (!el) { setContextMenu(null); return; }
-                            const rect = el.getBoundingClientRect();
-                            const world = screenToWorld(canvasViewport, contextMenu.x + rect.left, contextMenu.y + rect.top, rect);
-                            placeSymbolAtWorld(def.id, world.x, world.y);
-                            setContextMenu(null);
-                            setContextSymbolGroup(null);
-                          }}
-                        >
-                          {def.label}
-                        </button>
-                      ))
-                    : null}
-                </div>
-                <div className="relative">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
-                    onClick={() =>
-                      setContextSymbolGroup((g) => (g === "flowchart" ? null : "flowchart"))
-                    }
-                  >
-                    <span>+ Flowchart</span>
-                    <span className="text-slate-400">{contextSymbolGroup === "flowchart" ? "▾" : "▸"}</span>
-                  </button>
-                  {contextSymbolGroup === "flowchart"
-                    ? listSymbolTypesByGroup("flowchart").map((def) => (
-                        <button
-                          key={def.id}
-                          type="button"
-                          className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 pl-6 text-left text-sm text-slate-700 hover:bg-slate-100"
-                          onClick={() => {
-                            const el = shellRef.current;
-                            if (!el) { setContextMenu(null); return; }
-                            const rect = el.getBoundingClientRect();
-                            const world = screenToWorld(canvasViewport, contextMenu.x + rect.left, contextMenu.y + rect.top, rect);
-                            placeSymbolAtWorld(def.id, world.x, world.y);
-                            setContextMenu(null);
-                            setContextSymbolGroup(null);
-                          }}
-                        >
-                          {def.label}
-                        </button>
-                      ))
-                    : null}
-                </div>
+                {SYMBOL_GROUPS.map((group) => (
+                  <div className="relative" key={group}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"
+                      onClick={() =>
+                        setContextSymbolGroup((g) => (g === group ? null : group))
+                      }
+                    >
+                      <span>+ {SYMBOL_GROUP_LABELS[group]}</span>
+                      <span className="text-slate-400">{contextSymbolGroup === group ? "▾" : "▸"}</span>
+                    </button>
+                    {contextSymbolGroup === group
+                      ? listSymbolTypesByGroup(group).map((def) => (
+                          <button
+                            key={def.id}
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 pl-6 text-left text-sm text-slate-700 hover:bg-slate-100"
+                            onClick={() => {
+                              const el = shellRef.current;
+                              if (!el) { setContextMenu(null); return; }
+                              const rect = el.getBoundingClientRect();
+                              const world = screenToWorld(canvasViewport, contextMenu.x + rect.left, contextMenu.y + rect.top, rect);
+                              placeSymbolAtWorld(def.id, world.x, world.y);
+                              setContextMenu(null);
+                              setContextSymbolGroup(null);
+                            }}
+                          >
+                            {def.label}
+                          </button>
+                        ))
+                      : null}
+                  </div>
+                ))}
                 <button
                   type="button"
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-800 hover:bg-slate-100"

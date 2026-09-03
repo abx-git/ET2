@@ -37,8 +37,10 @@ import {
   type AlignMode,
 } from "@/lib/element-align";
 import {
+  getSymbolTypeDefinition,
   listSymbolTypesByGroup,
   SYMBOL_GROUP_LABELS,
+  SYMBOL_GROUPS,
   type SymbolType,
 } from "@/lib/diagram-symbol";
 import {
@@ -202,11 +204,7 @@ export function CanvasToolbar({
     };
   }, [openMenu, closeMenus]);
 
-  const placingLabel = placingSymbolType
-    ? listSymbolTypesByGroup("useCase")
-        .concat(listSymbolTypesByGroup("flowchart"))
-        .find((d) => d.id === placingSymbolType)?.label
-    : null;
+  const placingLabel = placingSymbolType ? getSymbolTypeDefinition(placingSymbolType).label : null;
 
   return (
     <div
@@ -254,7 +252,7 @@ export function CanvasToolbar({
             btnClass,
             placingSymbolType || openMenu === "symbols" ? "bg-violet-50 text-violet-900" : "",
           ].join(" ")}
-          title="Ablaufplan- und Use-Case-Symbole platzieren"
+          title="Ablaufplan-, Use-Case- und Datenmodell-Symbole platzieren"
           aria-expanded={openMenu === "symbols"}
           aria-haspopup="menu"
           aria-controls={openMenu === "symbols" ? symbolsMenuId : undefined}
@@ -264,7 +262,7 @@ export function CanvasToolbar({
           <span className="hidden sm:inline">Symbole</span>
         </button>
         <ToolbarMenu id={symbolsMenuId} open={openMenu === "symbols"}>
-          {(["useCase", "flowchart"] as const).map((group) => (
+          {SYMBOL_GROUPS.map((group) => (
             <div key={group} className="mb-1 last:mb-0">
               <p className="px-2.5 pb-0.5 pt-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
                 {SYMBOL_GROUP_LABELS[group]}

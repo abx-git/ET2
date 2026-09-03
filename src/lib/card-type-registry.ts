@@ -49,7 +49,7 @@ const REGISTRY: Record<string, CardTypeDefinition> = {
     label: "Symbol",
     defaultWidth: 160,
     defaultHeight: 80,
-    editableFields: ["title", "symbolType"],
+    editableFields: ["title", "symbolType", "entityAttributes"],
     listVisibleIn: "canvas",
   },
 };

@@ -436,7 +436,10 @@ export interface TaskTreeState {
   addNoteAfterSibling: (afterNodeId: string) => string | null;
   /** Neues Canvas-Symbol am Ende der Geschwisterliste unter `parentId`. */
   addSymbolAfter: (parentId: string | null, symbolType: SymbolType) => string;
-  updateCard: (nodeId: string, fields: Partial<TaskCardEditableFields>) => void;
+  updateCard: (
+    nodeId: string,
+    fields: Partial<TaskCardEditableFields & Pick<TaskNode, "entityAttributes" | "width" | "height">>,
+  ) => void;
   updateNote: (nodeId: string, fields: Partial<NoteEditableFields>) => void;
   /** Karte in Markdown-Notiz umwandeln (Beschreibung → Markdown). */
   convertCardToNote: (nodeId: string) => void;

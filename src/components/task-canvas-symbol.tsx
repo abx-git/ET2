@@ -6,6 +6,14 @@ import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
 import { canvasStackCssZIndex } from "@/lib/canvas-stack";
 import { taskCardRect } from "@/lib/connector-geometry";
 import { getSymbolTypeDefinition, type SymbolType } from "@/lib/diagram-symbol";
+import {
+  entityAttributeBadge,
+  entityTableMinHeight,
+  entityTableMinWidth,
+  isEntitySymbol,
+  parseEntityAttributesText,
+  serializeEntityAttributes,
+} from "@/lib/entity-attribute";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import type { TaskNode } from "@/types/task-node";
 
@@ -28,6 +36,8 @@ const HANDLE_POSITIONS: Record<ResizeHandle, string> = {
 function SymbolShape({ type }: { type: SymbolType }) {
   const stroke = "#334155";
   const fill = "#f8fafc";
+
+  if (type === "entity") return null;
 
   if (type === "actor") {
     return (
@@ -141,8 +151,10 @@ export function TaskCanvasSymbol({
   onTitleEditConsumed,
 }: TaskCanvasSymbolProps) {
   const symbolType = node.symbolType ?? "process";
+  const isEntity = isEntitySymbol(node);
   const def = getSymbolTypeDefinition(symbolType);
   const rect = taskCardRect(node);
+  const attrs = node.entityAttributes ?? [];
   const drag = useRef<{
     ox: number;
     oy: number;
@@ -154,9 +166,11 @@ export function TaskCanvasSymbol({
   } | null>(null);
   const editingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const [editing, setEditing] = useState(false);
-  const [hovered, setHovered] = useState(false);
+  const attrsRef = useRef<HTMLTextAreaElement>(null);
+  const [editing, setEditing] = useState<"title" | "attrs" | null>(null);
   const [draft, setDraft] = useState(node.title);
+  const [attrDraft, setAttrDraft] = useState("");
+  const [hovered, setHovered] = useState(false);
   const [coarsePointer, setCoarsePointer] = useState(false);
   const updateCard = useTaskTreeStore((s) => s.updateCard);
 
@@ -170,7 +184,7 @@ export function TaskCanvasSymbol({
 
   useEffect(() => {
     if (!requestTitleEdit) return;
-    setEditing(true);
+    setEditing("title");
     editingRef.current = true;
     setDraft(node.title);
     onTitleEditConsumed?.();
@@ -178,16 +192,39 @@ export function TaskCanvasSymbol({
   }, [requestTitleEdit, node.title, onTitleEditConsumed]);
 
   const beginEdit = () => {
-    setEditing(true);
+    setEditing("title");
     editingRef.current = true;
     setDraft(node.title);
     queueMicrotask(() => inputRef.current?.focus());
   };
 
+  const beginAttrEdit = () => {
+    setEditing("attrs");
+    editingRef.current = true;
+    setAttrDraft(serializeEntityAttributes(attrs));
+    queueMicrotask(() => {
+      attrsRef.current?.focus();
+      attrsRef.current?.setSelectionRange(attrsRef.current.value.length, attrsRef.current.value.length);
+    });
+  };
+
   const commitTitle = () => {
-    setEditing(false);
+    setEditing(null);
     editingRef.current = false;
     if (draft !== node.title) updateCard(node.id, { title: draft });
+  };
+
+  const commitAttrs = () => {
+    setEditing(null);
+    editingRef.current = false;
+    const next = parseEntityAttributesText(attrDraft);
+    const minH = entityTableMinHeight(next);
+    const minW = entityTableMinWidth();
+    updateCard(node.id, {
+      entityAttributes: next,
+      ...(rect.h < minH ? { height: minH } : {}),
+      ...(rect.w < minW ? { width: minW } : {}),
+    });
   };
 
   const onTitleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -198,18 +235,30 @@ export function TaskCanvasSymbol({
     if (e.key === "Escape") {
       e.preventDefault();
       setDraft(node.title);
-      setEditing(false);
+      setEditing(null);
       editingRef.current = false;
     }
   };
 
+  const onAttrKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setEditing(null);
+      editingRef.current = false;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      attrsRef.current?.blur();
+    }
+  };
+
   const showHandles = selected || hovered || connectSource;
-  const titleOnShape = symbolType !== "actor";
+  const titleOnShape = symbolType !== "actor" && !isEntity;
   const zIndex = canvasStackCssZIndex(node, {
     selected,
     hovered,
     connectSource,
-    editing,
+    editing: Boolean(editing),
   });
 
   const startResize = (handle: ResizeHandle, e: React.PointerEvent) => {
@@ -228,14 +277,14 @@ export function TaskCanvasSymbol({
       let y = oy;
       let width = ow;
       let height = oh;
-      if (handle.includes("e")) width = Math.max(MIN_SIZE, ow + dx);
-      if (handle.includes("s")) height = Math.max(MIN_SIZE, oh + dy);
+      if (handle.includes("e")) width = Math.max(isEntity ? entityTableMinWidth() : MIN_SIZE, ow + dx);
+      if (handle.includes("s")) height = Math.max(isEntity ? entityTableMinHeight(attrs) : MIN_SIZE, oh + dy);
       if (handle.includes("w")) {
-        width = Math.max(MIN_SIZE, ow - dx);
+        width = Math.max(isEntity ? entityTableMinWidth() : MIN_SIZE, ow - dx);
         x = ox + ow - width;
       }
       if (handle.includes("n")) {
-        height = Math.max(MIN_SIZE, oh - dy);
+        height = Math.max(isEntity ? entityTableMinHeight(attrs) : MIN_SIZE, oh - dy);
         y = oy + oh - height;
       }
       onResize({ x, y, width, height });
@@ -365,6 +414,97 @@ export function TaskCanvasSymbol({
       }}
     >
       <SymbolShape type={symbolType} />
+
+      {isEntity ? (
+        <div className="absolute inset-0 z-10 flex flex-col overflow-hidden rounded-[3px] border-[1.5px] border-slate-700 bg-white text-slate-900 shadow-sm">
+          <div className="flex h-7 shrink-0 items-center justify-center border-b-[1.5px] border-slate-700 bg-slate-100 px-1.5">
+            {editing === "title" ? (
+              <input
+                ref={inputRef}
+                data-card-title
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onTitleKeyDown}
+                onBlur={commitTitle}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full rounded border border-sky-300 bg-white px-1 py-0.5 text-center text-[12px] font-semibold outline-none ring-2 ring-sky-200/60"
+                aria-label="Objektname"
+              />
+            ) : (
+              <span
+                data-card-title
+                className="max-w-full cursor-text truncate px-1 text-center text-[12px] font-semibold"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  beginEdit();
+                }}
+              >
+                {node.title.trim() || <span className="font-normal italic text-slate-400">{def.defaultTitle}</span>}
+              </span>
+            )}
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {editing === "attrs" ? (
+              <textarea
+                ref={attrsRef}
+                value={attrDraft}
+                onChange={(e) => setAttrDraft(e.target.value)}
+                onKeyDown={onAttrKeyDown}
+                onBlur={commitAttrs}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                spellCheck={false}
+                className="h-full w-full resize-none bg-white px-1.5 py-1 font-mono text-[11px] leading-5 text-slate-800 outline-none"
+                aria-label="Attribute"
+                placeholder={"* id\nname : text\n~ kunden_id"}
+              />
+            ) : (
+              <button
+                type="button"
+                className="flex h-full w-full flex-col items-stretch overflow-hidden text-left"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  beginAttrEdit();
+                }}
+                title="Attribute bearbeiten"
+              >
+                {attrs.length === 0 ? (
+                  <span className="px-2 py-1 text-[11px] italic text-slate-400">Attribute…</span>
+                ) : (
+                  attrs.map((attr, i) => {
+                    const badge = entityAttributeBadge(attr);
+                    return (
+                      <span
+                        key={`${attr.name}-${i}`}
+                        className={[
+                          "flex min-h-5 items-center gap-1.5 border-b border-slate-100 px-1.5 text-[11px] leading-5 last:border-b-0",
+                          attr.key === "pk" ? "font-medium" : "",
+                        ].join(" ")}
+                      >
+                        <span
+                          className={[
+                            "w-5 shrink-0 text-center font-mono text-[9px] font-semibold",
+                            attr.key === "pk" ? "text-sky-700" : attr.key === "fk" ? "text-violet-700" : "text-transparent",
+                          ].join(" ")}
+                        >
+                          {badge ?? "·"}
+                        </span>
+                        <span className="min-w-0 truncate">{attr.name}</span>
+                        {attr.type ? (
+                          <span className="ml-auto shrink-0 truncate text-[10px] text-slate-400">{attr.type}</span>
+                        ) : null}
+                      </span>
+                    );
+                  })
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {titleOnShape ? (
         <div

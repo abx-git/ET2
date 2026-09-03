@@ -11,11 +11,14 @@ export const SYMBOL_TYPES = [
   "decision",
   "terminator",
   "document",
+  "entity",
 ] as const;
 
 export type SymbolType = (typeof SYMBOL_TYPES)[number];
 
-export type SymbolGroup = "useCase" | "flowchart";
+export type SymbolGroup = "useCase" | "flowchart" | "erm";
+
+export const SYMBOL_GROUPS: readonly SymbolGroup[] = ["useCase", "flowchart", "erm"];
 
 export interface SymbolTypeDefinition {
   id: SymbolType;
@@ -83,11 +86,20 @@ export const SYMBOL_TYPE_DEFINITIONS: Record<SymbolType, SymbolTypeDefinition> =
     defaultHeight: 90,
     defaultTitle: "Dokument",
   },
+  entity: {
+    id: "entity",
+    group: "erm",
+    label: "Objekt",
+    defaultWidth: 200,
+    defaultHeight: 140,
+    defaultTitle: "Objekt",
+  },
 };
 
 export const SYMBOL_GROUP_LABELS: Record<SymbolGroup, string> = {
   useCase: "Use Case",
   flowchart: "Flowchart",
+  erm: "Datenmodell",
 };
 
 export function isSymbolType(value: unknown): value is SymbolType {
