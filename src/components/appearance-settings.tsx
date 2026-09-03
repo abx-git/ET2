@@ -7,6 +7,7 @@ import {
   listSchemeFromAppearance,
 } from "@/lib/board-appearance";
 import { cardColorCssVars } from "@/lib/card-color";
+import { noteAccentCssVars } from "@/lib/note-accent";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 
 export function AppearanceSettings() {
@@ -15,67 +16,75 @@ export function AppearanceSettings() {
   const vars = appearanceToCssVars(appearance);
   const listScheme = listSchemeFromAppearance(appearance);
   const roseInk = cardColorCssVars("rose", listScheme)!;
+  const noteInk = noteAccentCssVars("steel", listScheme);
 
   return (
     <div className="space-y-4">
       <p className="text-xs text-[var(--muted)]">
         Farbschema für Listenansicht, Canvas und Seitenleisten. Hintergrund,
-        Schrift, Umrandung und Hervorhebung der Listen-Karten folgen dem Schema
+        Schrift und Hervorhebung der Listen-Karten folgen dem Schema
         und werden mit der Board-Datei gespeichert.
       </p>
 
       <div
-        className="overflow-hidden rounded-lg border"
+        className="overflow-hidden rounded-lg"
         style={{
           background: vars["--list-bg"],
-          borderColor: vars["--list-border"],
           color: vars["--list-text"],
-          boxShadow: vars["--list-shadow"],
         }}
         aria-hidden
       >
         <div
-          className="border-b px-3 py-1.5 text-[11px] font-medium"
+          className="px-3 py-1.5 text-[11px] font-medium"
           style={{
             background: vars["--list-header"],
-            borderColor: vars["--list-border"],
             color: vars["--list-muted"],
           }}
         >
           Listenansicht
         </div>
-        <div className="space-y-1.5 p-2.5">
+        <div className="space-y-2 p-2.5">
           <div
-            className="rounded-md border px-2.5 py-1.5 text-xs font-medium ring-2"
+            className="rounded-md px-2.5 py-1.5 text-xs font-medium"
             style={{
               background: vars["--list-card"],
-              borderColor: vars["--list-focus"],
-              boxShadow: `0 0 0 1px ${vars["--list-ring"]}`,
+              boxShadow: `${vars["--list-shadow"]}, 0 0 0 2px ${vars["--list-focus"]}`,
             }}
           >
             Fokussierte Karte
           </div>
           <div
-            className="rounded-md border px-2.5 py-1.5 text-xs"
+            className="rounded-md px-2.5 py-1.5 text-xs"
             style={{
               background: vars["--list-card-nested"],
-              borderColor: vars["--list-border"],
               color: vars["--list-muted"],
+              boxShadow: vars["--list-shadow"],
             }}
           >
-            Unterkarte · Umrandung
+            Unterkarte
           </div>
           <div
             className={[
-              "rounded-md border px-2.5 py-1.5 text-xs font-medium",
-              listScheme === "dark" ? "bg-rose-950 border-rose-400/40" : "bg-rose-100 border-rose-300/80",
+              "rounded-md px-2.5 py-1.5 text-xs font-medium",
+              listScheme === "dark" ? "bg-rose-950" : "bg-rose-100",
             ].join(" ")}
             style={{
               color: roseInk["--list-text"],
-              borderColor: roseInk["--list-border"],
+              boxShadow: vars["--list-shadow"],
             }}
           >
             Rote Karte
+          </div>
+          <div
+            className="rounded-md px-2.5 py-1.5 text-xs"
+            style={{
+              background: noteInk["--list-card"],
+              color: noteInk["--list-text"],
+              boxShadow: vars["--list-shadow"],
+            }}
+          >
+            <span className="font-medium">Notiz</span>
+            <span style={{ color: noteInk["--list-muted"] }}> · lesbarer Kontrast</span>
           </div>
         </div>
       </div>

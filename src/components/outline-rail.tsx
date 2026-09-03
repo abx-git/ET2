@@ -12,6 +12,7 @@ import {
   outlineNestId,
 } from "@/lib/outline-dnd";
 import { isNoteNode, nodeDisplayTitle } from "@/lib/tree-node-kind";
+import { listSchemeFromAppearance } from "@/lib/board-appearance";
 import { noteAccentClasses } from "@/lib/note-accent";
 import { isTaskMarkedDone } from "@/lib/task-tags";
 import { useTaskTreeStore } from "@/store/task-tree-store";
@@ -98,7 +99,8 @@ function OutlineRow({
   onTitleEditCancel?: () => void;
 }) {
   const noteAccentColor = useTaskTreeStore((s) => s.noteAccentColor);
-  const accent = noteAccentClasses(noteAccentColor);
+  const appearance = useTaskTreeStore((s) => s.appearance);
+  const accent = noteAccentClasses(noteAccentColor, listSchemeFromAppearance(appearance));
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
     id: outlineDragId(node.id),
     data: { kind: "outlineCard" as const, source: "outline" as const, nodeId: node.id },

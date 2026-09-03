@@ -28,9 +28,9 @@ export interface CardColorOption {
   label: string;
   /** Vorschau-Swatch im Editor / Kontextmenü */
   swatchClass: string;
-  /** Karten-Rahmen/Hintergrund im hellen Schema */
+  /** Kartenhintergrund im hellen Schema */
   cardClass: string;
-  /** Karten-Rahmen/Hintergrund im dunklen Listenschema */
+  /** Kartenhintergrund im dunklen Listenschema */
   cardClassDark: string;
   /** Linke Akzentleiste — bleibt auch bei Statusfarben sichtbar */
   accentBarClass: string;
@@ -42,8 +42,8 @@ export const CARD_COLOR_OPTIONS: CardColorOption[] = [
     id: "sky",
     label: "Blau",
     swatchClass: "bg-sky-400",
-    cardClass: "border-sky-300/80 bg-sky-100",
-    cardClassDark: "border-sky-400/40 bg-sky-950",
+    cardClass: "bg-sky-100",
+    cardClassDark: "bg-sky-950",
     accentBarClass: "bg-sky-500",
     listInk: {
       light: { text: "#0c4a6e", muted: "#0369a1", card: "#e0f2fe", hover: "#bae6fd", border: "rgba(14, 165, 233, 0.45)" },
@@ -54,8 +54,8 @@ export const CARD_COLOR_OPTIONS: CardColorOption[] = [
     id: "emerald",
     label: "Grün",
     swatchClass: "bg-emerald-400",
-    cardClass: "border-emerald-300/80 bg-emerald-100",
-    cardClassDark: "border-emerald-400/40 bg-emerald-950",
+    cardClass: "bg-emerald-100",
+    cardClassDark: "bg-emerald-950",
     accentBarClass: "bg-emerald-500",
     listInk: {
       light: { text: "#064e3b", muted: "#047857", card: "#d1fae5", hover: "#a7f3d0", border: "rgba(16, 185, 129, 0.45)" },
@@ -66,8 +66,8 @@ export const CARD_COLOR_OPTIONS: CardColorOption[] = [
     id: "amber",
     label: "Gelb",
     swatchClass: "bg-amber-400",
-    cardClass: "border-amber-300/80 bg-amber-100",
-    cardClassDark: "border-amber-400/40 bg-amber-950",
+    cardClass: "bg-amber-100",
+    cardClassDark: "bg-amber-950",
     accentBarClass: "bg-amber-500",
     listInk: {
       light: { text: "#78350f", muted: "#b45309", card: "#fef3c7", hover: "#fde68a", border: "rgba(245, 158, 11, 0.5)" },
@@ -78,8 +78,8 @@ export const CARD_COLOR_OPTIONS: CardColorOption[] = [
     id: "rose",
     label: "Rot",
     swatchClass: "bg-rose-400",
-    cardClass: "border-rose-300/80 bg-rose-100",
-    cardClassDark: "border-rose-400/40 bg-rose-950",
+    cardClass: "bg-rose-100",
+    cardClassDark: "bg-rose-950",
     accentBarClass: "bg-rose-500",
     listInk: {
       light: { text: "#4c0519", muted: "#9f1239", card: "#ffe4e6", hover: "#fecdd3", border: "rgba(244, 63, 94, 0.45)" },
@@ -90,8 +90,8 @@ export const CARD_COLOR_OPTIONS: CardColorOption[] = [
     id: "violet",
     label: "Violett",
     swatchClass: "bg-violet-400",
-    cardClass: "border-violet-300/80 bg-violet-100",
-    cardClassDark: "border-violet-400/40 bg-violet-950",
+    cardClass: "bg-violet-100",
+    cardClassDark: "bg-violet-950",
     accentBarClass: "bg-violet-500",
     listInk: {
       light: { text: "#2e1065", muted: "#6d28d9", card: "#ede9fe", hover: "#ddd6fe", border: "rgba(139, 92, 246, 0.45)" },
@@ -102,8 +102,8 @@ export const CARD_COLOR_OPTIONS: CardColorOption[] = [
     id: "cyan",
     label: "Türkis",
     swatchClass: "bg-cyan-400",
-    cardClass: "border-cyan-300/80 bg-cyan-100",
-    cardClassDark: "border-cyan-400/40 bg-cyan-950",
+    cardClass: "bg-cyan-100",
+    cardClassDark: "bg-cyan-950",
     accentBarClass: "bg-cyan-500",
     listInk: {
       light: { text: "#164e63", muted: "#0e7490", card: "#cffafe", hover: "#a5f3fc", border: "rgba(6, 182, 212, 0.45)" },
@@ -114,8 +114,8 @@ export const CARD_COLOR_OPTIONS: CardColorOption[] = [
     id: "orange",
     label: "Orange",
     swatchClass: "bg-orange-400",
-    cardClass: "border-orange-300/80 bg-orange-100",
-    cardClassDark: "border-orange-400/40 bg-orange-950",
+    cardClass: "bg-orange-100",
+    cardClassDark: "bg-orange-950",
     accentBarClass: "bg-orange-500",
     listInk: {
       light: { text: "#7c2d12", muted: "#c2410c", card: "#ffedd5", hover: "#fed7aa", border: "rgba(249, 115, 22, 0.5)" },
@@ -126,8 +126,8 @@ export const CARD_COLOR_OPTIONS: CardColorOption[] = [
     id: "slate",
     label: "Grau",
     swatchClass: "bg-slate-400",
-    cardClass: "border-slate-300/80 bg-slate-100",
-    cardClassDark: "border-slate-400/40 bg-slate-800",
+    cardClass: "bg-slate-100",
+    cardClassDark: "bg-slate-800",
     accentBarClass: "bg-slate-500",
     listInk: {
       light: { text: "#0f172a", muted: "#475569", card: "#f1f5f9", hover: "#e2e8f0", border: "rgba(100, 116, 139, 0.45)" },

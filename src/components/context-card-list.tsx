@@ -8,6 +8,7 @@ import type { CardFieldVisibility } from "@/lib/card-field-visibility";
 import type { CardInteractionMode } from "@/lib/card-expand";
 import { visibleChildrenOf } from "@/lib/card-expand";
 import type { BoardPaneId } from "@/lib/board-pane";
+import { listSchemeFromAppearance } from "@/lib/board-appearance";
 import { contextGapId } from "@/lib/context-list-dnd";
 import { noteAccentClasses } from "@/lib/note-accent";
 import { isNoteNode } from "@/lib/tree-node-kind";
@@ -300,7 +301,8 @@ export function ContextCardList({
   onRequestDelete,
 }: ContextCardListProps) {
   const noteAccentColor = useTaskTreeStore((s) => s.noteAccentColor);
-  const accent = noteAccentClasses(noteAccentColor);
+  const appearance = useTaskTreeStore((s) => s.appearance);
+  const accent = noteAccentClasses(noteAccentColor, listSchemeFromAppearance(appearance));
   useEffect(() => {
     if (!keyboardFocusNodeId) return;
     const el = document.querySelector(
@@ -380,7 +382,7 @@ export function ContextCardList({
           <button
             type="button"
             onClick={onAddSibling}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--list-border)] bg-[var(--list-card)] px-2.5 py-1.5 text-xs font-medium text-[var(--list-text)] hover:bg-[var(--list-hover)]"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--list-card)] px-2.5 py-1.5 text-xs font-medium text-[var(--list-text)] shadow-sm hover:bg-[var(--list-hover)]"
           >
             <Plus className="h-3.5 w-3.5" aria-hidden />
             Karte
@@ -388,7 +390,7 @@ export function ContextCardList({
           <button
             type="button"
             onClick={onAddNote}
-            className={["inline-flex items-center gap-1.5 rounded-lg border", accent.listButton].join(
+            className={["inline-flex items-center gap-1.5 rounded-lg", accent.listButton].join(
               " ",
             )}
           >

@@ -86,8 +86,8 @@ export function appearanceToCssVars(appearance: BoardAppearance): Record<string,
 
   const listText = lightList ? "#1a2330" : "#e8eef4";
   const listMuted = lightList ? "#5c6b7a" : "#93a1b1";
-  const listCard = mix(canvas, lightList ? 255 : 0, lightList ? 0.62 : 0.16);
-  const listCardNested = mix(canvas, lightList ? 255 : 0, lightList ? 0.38 : 0.08);
+  const listCard = mix(canvas, 255, lightList ? 0.9 : 0.14);
+  const listCardNested = mix(canvas, 255, lightList ? 0.58 : 0.08);
   const listHover = mix(canvas, lightList ? 0 : 255, lightList ? 0.07 : 0.14);
   const listHeader = mix(canvas, lightList ? 255 : 0, lightList ? 0.28 : 0.1);
   const listBorder = lightList ? "rgba(30, 40, 55, 0.14)" : "rgba(190, 210, 230, 0.2)";
@@ -127,7 +127,9 @@ export function appearanceToCssVars(appearance: BoardAppearance): Record<string,
     "--list-add-text": listAddText,
     "--list-drop": listDrop,
     "--list-drop-border": listDropBorder,
-    "--list-shadow": lightList ? "0 1px 2px rgba(15, 23, 42, 0.06)" : "0 1px 2px rgba(0, 0, 0, 0.35)",
+    "--list-shadow": lightList
+      ? "0 1px 2px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.06)"
+      : "0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.28)",
     "--list-ring": rgba(listFocus, 0.55),
   };
 }

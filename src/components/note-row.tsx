@@ -23,9 +23,10 @@ import { createPortal } from "react-dom";
 
 import type { CardInteractionMode } from "@/lib/card-expand";
 import type { BoardPaneId } from "@/lib/board-pane";
+import { listSchemeFromAppearance } from "@/lib/board-appearance";
 import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
 import { contextCardDragId, contextNestDropId } from "@/lib/context-list-dnd";
-import { noteAccentClasses } from "@/lib/note-accent";
+import { noteAccentClasses, noteAccentCssVars } from "@/lib/note-accent";
 import { nodeDisplayTitle } from "@/lib/tree-node-kind";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import type { TaskNode } from "@/types/task-node";
@@ -86,7 +87,9 @@ export function NoteRow({
   onRequestDelete,
 }: NoteRowProps) {
   const noteAccentColor = useTaskTreeStore((s) => s.noteAccentColor);
-  const accent = noteAccentClasses(noteAccentColor);
+  const appearance = useTaskTreeStore((s) => s.appearance);
+  const listScheme = listSchemeFromAppearance(appearance);
+  const accent = noteAccentClasses(noteAccentColor, listScheme);
   const headingId = useId();
   const menuRef = useRef<HTMLDivElement>(null);
   const menuPanelRef = useRef<HTMLDivElement>(null);
@@ -144,6 +147,7 @@ export function NoteRow({
       ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
       : {}),
     ...(nestDepth > 0 ? { marginLeft: `${nestDepth * 0.75}rem` } : {}),
+    ...noteAccentCssVars(noteAccentColor, listScheme),
   };
 
   const openMenu = (top: number, left: number) => {
@@ -252,9 +256,8 @@ export function NoteRow({
       }}
       onContextMenu={handleContextMenu}
       className={[
-        "group relative flex touch-none cursor-grab items-stretch gap-1 rounded-lg border px-2 py-2 shadow-[var(--list-shadow)] transition active:cursor-grabbing",
-        accent.cardBorderBg,
-        nestDepth > 0 ? accent.cardBorderBgNested : "",
+        "group relative flex touch-none cursor-grab items-stretch gap-1 rounded-lg px-2 py-2 list-card-surface transition active:cursor-grabbing",
+        nestDepth > 0 ? accent.cardClassNested : accent.cardClass,
         isDragging ? "opacity-40" : "",
         isNestDropTarget || isOver ? accent.nestDrop : "",
         isSearchFocus ? "ring-2 ring-amber-300/90" : "",

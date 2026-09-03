@@ -107,6 +107,7 @@ export function TaskCanvas({
   const contextNodeId = useTaskTreeStore((s) => s.contextNodeId);
   const relations = useTaskTreeStore((s) => s.relations);
   const completedTag = useTaskTreeStore((s) => s.completedTag);
+  const noteAccentColor = useTaskTreeStore((s) => s.noteAccentColor);
   const canvasViewport = useTaskTreeStore((s) => s.canvasViewport);
   const setCanvasViewport = useTaskTreeStore((s) => s.setCanvasViewport);
   const ensureContextCanvasLayout = useTaskTreeStore((s) => s.ensureContextCanvasLayout);
@@ -503,6 +504,7 @@ export function TaskCanvas({
             relations: visibleRelations,
             groups: canvasGroups,
             completedTag,
+            noteAccentColor,
           });
         } catch (err) {
           console.error("Canvas-SVG-Export fehlgeschlagen", err);
@@ -541,6 +543,7 @@ export function TaskCanvas({
       visibleRelations,
       canvasGroups,
       completedTag,
+      noteAccentColor,
       setSelectedCanvasNodeId,
       setSelectedRelationId,
       clearCanvasMultiSelect,
@@ -553,6 +556,7 @@ export function TaskCanvas({
       relations: visibleRelations,
       groups: canvasGroups,
       completedTag,
+      noteAccentColor,
     });
     if (!ok) {
       window.alert("In die Zwischenablage kopieren ist in diesem Kontext nicht möglich.");
@@ -560,7 +564,7 @@ export function TaskCanvas({
     }
     setDrawioCopied(true);
     window.setTimeout(() => setDrawioCopied(false), 1400);
-  }, [nodes, visibleRelations, canvasGroups, completedTag]);
+  }, [nodes, visibleRelations, canvasGroups, completedTag, noteAccentColor]);
 
   const selectCanvasNodeForMenu = useCallback((nodeId: string) => {
     const multi = useTaskTreeStore.getState().selectedCanvasNodeIds;

@@ -53,7 +53,7 @@ export function CanvasGroupBox({
   return (
     <div
       className={[
-        "absolute rounded-lg border-2 border-dashed",
+        "absolute rounded-lg border border-dashed",
         colorClass,
         selected ? "ring-2 ring-teal-500/50" : "",
       ].join(" ")}

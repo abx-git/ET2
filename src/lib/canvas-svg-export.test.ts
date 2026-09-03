@@ -105,6 +105,15 @@ describe("buildCanvasSvg", () => {
     expect(mxfile).toContain("entryX=");
   });
 
+  it("draws notes as filled paper without a card stroke", () => {
+    const svg = buildCanvasSvg({
+      nodes: [card("n1", "Memo", { kind: "note", markdown: "Hallo" })],
+    });
+    expect(svg).toContain('data-et2-kind="note"');
+    expect(svg).toContain('fill="#f8fafc"');
+    expect(svg).not.toMatch(/data-et2-kind="note"[\s\S]*?stroke-width="1"/);
+  });
+
   it("applies rotation around the card center", () => {
     const svg = buildCanvasSvg({
       nodes: [card("a", "Tilt", { x: 0, y: 0, width: 100, height: 50, rotation: 15 })],

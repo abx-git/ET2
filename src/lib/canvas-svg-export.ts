@@ -7,6 +7,7 @@ import { APP_VERSION } from "@/lib/app-version";
 import type { CanvasGroup } from "@/lib/canvas-group";
 import { compareCanvasStackOrder } from "@/lib/canvas-stack";
 import type { CardColorId } from "@/lib/card-color";
+import { DEFAULT_NOTE_ACCENT, noteAccentPalette, type NoteAccentId } from "@/lib/note-accent";
 import { relationAnchors, taskCardRect, type ElementRect } from "@/lib/connector-geometry";
 import { relationStroke } from "@/lib/task-relations";
 import { DEFAULT_COMPLETED_TAG, isTaskMarkedDone, tagsWithoutCompletedTag } from "@/lib/task-tags";
@@ -29,6 +30,7 @@ export interface CanvasSvgScene {
   relations?: readonly TaskRelation[];
   groups?: readonly CanvasGroup[];
   completedTag?: string;
+  noteAccentColor?: NoteAccentId;
 }
 
 interface Palette {
@@ -38,18 +40,17 @@ interface Palette {
 }
 
 const CARD_PALETTE: Record<CardColorId, Palette> = {
-  sky: { fill: "#e0f2fe", stroke: "#7dd3fc", accent: "#0ea5e9" },
-  emerald: { fill: "#d1fae5", stroke: "#6ee7b7", accent: "#10b981" },
-  amber: { fill: "#fef3c7", stroke: "#fcd34d", accent: "#f59e0b" },
-  rose: { fill: "#ffe4e6", stroke: "#fda4af", accent: "#f43f5e" },
-  violet: { fill: "#ede9fe", stroke: "#c4b5fd", accent: "#8b5cf6" },
-  cyan: { fill: "#cffafe", stroke: "#67e8f9", accent: "#06b6d4" },
-  orange: { fill: "#ffedd5", stroke: "#fdba74", accent: "#f97316" },
-  slate: { fill: "#f1f5f9", stroke: "#cbd5e1", accent: "#64748b" },
+  sky: { fill: "#e0f2fe", stroke: "#e0f2fe", accent: "#0ea5e9" },
+  emerald: { fill: "#d1fae5", stroke: "#d1fae5", accent: "#10b981" },
+  amber: { fill: "#fef3c7", stroke: "#fef3c7", accent: "#f59e0b" },
+  rose: { fill: "#ffe4e6", stroke: "#ffe4e6", accent: "#f43f5e" },
+  violet: { fill: "#ede9fe", stroke: "#ede9fe", accent: "#8b5cf6" },
+  cyan: { fill: "#cffafe", stroke: "#cffafe", accent: "#06b6d4" },
+  orange: { fill: "#ffedd5", stroke: "#ffedd5", accent: "#f97316" },
+  slate: { fill: "#f1f5f9", stroke: "#f1f5f9", accent: "#64748b" },
 };
 
-const DEFAULT_CARD: Palette = { fill: "#ffffff", stroke: "#e2e8f0", accent: "#cbd5e1" };
-const NOTE_PALETTE: Palette = { fill: "#fefce8", stroke: "#fde68a", accent: "#facc15" };
+const DEFAULT_CARD: Palette = { fill: "#ffffff", stroke: "#ffffff", accent: "#94a3b8" };
 const SYMBOL_FILL = "#f8fafc";
 const SYMBOL_STROKE = "#334155";
 
@@ -88,8 +89,11 @@ function htmlEscape(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function nodePalette(node: TaskNode): Palette {
-  if (isNoteNode(node)) return NOTE_PALETTE;
+function nodePalette(node: TaskNode, noteAccent?: NoteAccentId): Palette {
+  if (isNoteNode(node)) {
+    const p = noteAccentPalette(noteAccent ?? DEFAULT_NOTE_ACCENT);
+    return { fill: p.fill, stroke: p.fill, accent: p.accent };
+  }
   if (node.cardColor && CARD_PALETTE[node.cardColor]) return CARD_PALETTE[node.cardColor];
   return DEFAULT_CARD;
 }
@@ -210,9 +214,9 @@ function svgTextLines(
     .join("");
 }
 
-function renderCardOrNote(node: TaskNode, completedTag: string): string {
+function renderCardOrNote(node: TaskNode, completedTag: string, noteAccent?: NoteAccentId): string {
   const rect = taskCardRect(node);
-  const pal = nodePalette(node);
+  const pal = nodePalette(node, noteAccent);
   const note = isNoteNode(node);
   const done = !note && isTaskMarkedDone(node, completedTag);
   const opacity = done ? ` opacity="0.5"` : "";
@@ -227,15 +231,18 @@ function renderCardOrNote(node: TaskNode, completedTag: string): string {
   const bodyLines = wrapText(body, innerW, 11).slice(0, 5);
   const tagLine = tags.length ? wrapText(tags.join(" · "), innerW, 10).slice(0, 1) : [];
   let cursorY = rect.y + 8 + 14 + 16;
+  const noteInk = note ? noteAccentPalette(noteAccent ?? DEFAULT_NOTE_ACCENT) : null;
+  const titleFill = noteInk?.text ?? "#0f172a";
+  const bodyFill = noteInk?.muted ?? "#64748b";
 
-  const titleSvg = svgTextLines(titleLines, innerX, cursorY, 13, "#0f172a", { weight: 600 });
+  const titleSvg = svgTextLines(titleLines, innerX, cursorY, 13, titleFill, { weight: 600 });
   cursorY += titleLines.length * 16 + 6;
-  const bodySvg = svgTextLines(bodyLines, innerX, cursorY, 11, "#64748b");
+  const bodySvg = svgTextLines(bodyLines, innerX, cursorY, 11, bodyFill);
   cursorY += bodyLines.length * 14 + (tagLine.length ? 6 : 0);
   const tagSvg = svgTextLines(tagLine, innerX, cursorY, 10, "#0369a1");
 
   return `<g data-et2-id="${xmlEscape(node.id)}" data-et2-kind="${note ? "note" : "card"}"${rotateAttr(node, rect)}${opacity}>
-  <rect x="${num(rect.x)}" y="${num(rect.y)}" width="${num(rect.w)}" height="${num(rect.h)}" rx="12" ry="12" fill="${pal.fill}" stroke="${pal.stroke}" stroke-width="1"/>
+  <rect x="${num(rect.x)}" y="${num(rect.y)}" width="${num(rect.w)}" height="${num(rect.h)}" rx="12" ry="12" fill="${pal.fill}"/>
   <path d="M${num(rect.x + 12)} ${num(rect.y)} H${num(rect.x + rect.w - 12)} Q${num(rect.x + rect.w)} ${num(rect.y)} ${num(rect.x + rect.w)} ${num(rect.y + 12)} V${num(rect.y + 8)} H${num(rect.x)} V${num(rect.y + 12)} Q${num(rect.x)} ${num(rect.y)} ${num(rect.x + 12)} ${num(rect.y)} Z" fill="${pal.accent}"/>
   ${titleSvg}${bodySvg}${tagSvg}
 </g>`;
@@ -410,8 +417,8 @@ function symbolMxStyle(node: TaskNode): string {
   return mxStyle({ rounded: true, arcSize: 14, absoluteArcSize: 1, ...common });
 }
 
-function cardMxStyle(node: TaskNode): string {
-  const pal = nodePalette(node);
+function cardMxStyle(node: TaskNode, noteAccent?: NoteAccentId): string {
+  const pal = nodePalette(node, noteAccent);
   return mxStyle({
     rounded: true,
     arcSize: 12,
@@ -419,10 +426,13 @@ function cardMxStyle(node: TaskNode): string {
     whiteSpace: "wrap",
     html: true,
     fillColor: pal.fill,
-    strokeColor: pal.stroke,
+    strokeColor: pal.fill,
+    strokeWidth: 0,
     fontFamily: "Arial",
     fontSize: 12,
-    fontColor: "#0f172a",
+    fontColor: isNoteNode(node)
+      ? noteAccentPalette(noteAccent ?? DEFAULT_NOTE_ACCENT).text
+      : "#0f172a",
     align: "left",
     verticalAlign: "top",
     spacingLeft: 10,
@@ -499,7 +509,7 @@ function buildMxGraphModelXml(
         `<mxCell id="${xmlEscape(id)}" value="${xmlEscape(htmlEscape(nodeDisplayTitle(node)))}" style="${style}" vertex="1" parent="1"><mxGeometry x="${num(rect.x - offset.x)}" y="${num(rect.y - offset.y)}" width="${num(rect.w)}" height="${num(rect.h)}" as="geometry"/></mxCell>`,
       );
     } else {
-      const style = `${cardMxStyle(node)}${rotation}`;
+      const style = `${cardMxStyle(node, scene.noteAccentColor)}${rotation}`;
       cells.push(
         `<mxCell id="${xmlEscape(id)}" value="${xmlEscape(cardMxValue(node, completedTag))}" style="${style}" vertex="1" parent="1"><mxGeometry x="${num(rect.x - offset.x)}" y="${num(rect.y - offset.y)}" width="${num(rect.w)}" height="${num(rect.h)}" as="geometry"/></mxCell>`,
       );
@@ -575,7 +585,7 @@ export function buildCanvasSvg(scene: CanvasSvgScene): string {
 
   const groupsSvg = (scene.groups ?? []).map(renderGroup).join("");
   const nodesSvg = stacked
-    .map((node) => (isSymbolNode(node) ? renderSymbol(node) : renderCardOrNote(node, completedTag)))
+    .map((node) => (isSymbolNode(node) ? renderSymbol(node) : renderCardOrNote(node, completedTag, scene.noteAccentColor)))
     .join("");
   const relations = scene.relations ?? [];
   const relationsSvg = relations

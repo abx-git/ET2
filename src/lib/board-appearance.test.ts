@@ -38,4 +38,12 @@ describe("appearanceToCssVars", () => {
     expect(vars["--list-text"]).toBe("#e8eef4");
     expect(vars["color-scheme"]).toBe("dark");
   });
+
+  it("elevates list cards above the canvas without relying on a border", () => {
+    const light = appearanceToCssVars(DEFAULT_APPEARANCE);
+    expect(light["--list-card"].toLowerCase()).not.toBe(DEFAULT_APPEARANCE.canvas.toLowerCase());
+    const midnight = APPEARANCE_PRESETS.find((p) => p.id === "midnight")!.appearance;
+    const dark = appearanceToCssVars(midnight);
+    expect(dark["--list-card"].toLowerCase()).not.toBe(midnight.canvas.toLowerCase());
+  });
 });

@@ -10,7 +10,8 @@ import {
   formatDueHint,
   isDueOverdue,
 } from "@/lib/aggregates";
-import { cardColorAccentClass, cardColorClass } from "@/lib/card-color";
+import { listSchemeFromAppearance } from "@/lib/board-appearance";
+import { cardColorAccentClass, cardColorClass, cardColorCssVars } from "@/lib/card-color";
 import { canvasStackCssZIndex } from "@/lib/canvas-stack";
 import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
 import { taskCardRect } from "@/lib/connector-geometry";
@@ -20,6 +21,7 @@ import {
   rollupDisplayTotals,
 } from "@/lib/task-effort";
 import { taskLinkHref } from "@/lib/task-link";
+import { noteAccentClasses, noteAccentCssVars } from "@/lib/note-accent";
 import { isTaskMarkedDone, tagsWithoutCompletedTag } from "@/lib/task-tags";
 import { isNoteNode } from "@/lib/tree-node-kind";
 import { useTaskTreeStore } from "@/store/task-tree-store";
@@ -130,6 +132,10 @@ export function TaskCanvasCard({
   const updateCard = useTaskTreeStore((s) => s.updateCard);
   const effortOnTasksEnabled = useTaskTreeStore((s) => s.effortOnTasksEnabled);
   const fieldVisibility = useTaskTreeStore((s) => s.cardFieldVisibility);
+  const appearance = useTaskTreeStore((s) => s.appearance);
+  const noteAccentColor = useTaskTreeStore((s) => s.noteAccentColor);
+  const listScheme = listSchemeFromAppearance(appearance);
+  const noteAccent = noteAccentClasses(noteAccentColor, listScheme);
   const note = isNoteNode(node);
   const relationConnectMode = useTaskTreeStore((s) => s.relationConnectMode);
   const relationDraftSourceId = useTaskTreeStore((s) => s.relationDraftSourceId);
@@ -162,11 +168,14 @@ export function TaskCanvasCard({
   const showScheduleMeta = Boolean(dueHint || reminderHint || effortLabel);
 
   const colorClass = note
-    ? "bg-yellow-50 border-yellow-200/80"
-    : cardColorClass(node.cardColor) ?? "bg-white border-slate-200/60";
+    ? noteAccent.cardClass
+    : cardColorClass(node.cardColor, listScheme) ?? "bg-[var(--list-card)]";
   const accent = note
-    ? "bg-yellow-400"
-    : cardColorAccentClass(node.cardColor) ?? "bg-slate-300";
+    ? noteAccent.accentBar
+    : cardColorAccentClass(node.cardColor) ?? "bg-slate-400/80";
+  const surfaceVars = note
+    ? noteAccentCssVars(noteAccentColor, listScheme)
+    : cardColorCssVars(node.cardColor, listScheme);
 
   const hasChildren = node.children.length > 0;
   const linkHref = !note ? taskLinkHref(node.link) : null;
@@ -301,20 +310,20 @@ export function TaskCanvasCard({
     <div
       data-canvas-card-id={node.id}
       className={[
-        "group/card absolute flex flex-col rounded-xl border transition-[box-shadow,opacity,filter] duration-150",
+        "group/card absolute flex flex-col rounded-xl transition-[box-shadow,opacity,filter] duration-150",
         editing ? "" : "select-none cursor-grab active:cursor-grabbing",
         colorClass,
         selected
           ? multiSelected
-            ? "ring-[3px] ring-teal-400 ring-offset-2 shadow-[0_0_0_6px_rgba(45,212,191,0.35)] shadow-xl outline outline-2 outline-teal-600/80"
-            : "ring-2 ring-teal-500 ring-offset-1 shadow-xl"
+            ? "ring-[3px] ring-teal-400 ring-offset-2 ring-offset-[var(--canvas)] shadow-xl outline outline-2 outline-teal-600/80"
+            : "ring-2 ring-teal-500 ring-offset-1 ring-offset-[var(--canvas)] shadow-xl"
           : hovered
-            ? "shadow-lg shadow-slate-900/10"
-            : "shadow-md shadow-slate-900/5",
+            ? "shadow-lg shadow-black/15"
+            : "list-card-surface",
         connectSource ? "ring-2 ring-amber-400 shadow-xl" : "",
-        nestTarget ? "ring-2 ring-violet-500 ring-offset-2 shadow-xl shadow-violet-500/30 scale-[1.02]" : "",
+        nestTarget ? "ring-2 ring-violet-500 ring-offset-2 ring-offset-[var(--canvas)] shadow-xl shadow-violet-500/30 scale-[1.02]" : "",
         done ? "opacity-50 saturate-50" : "",
-        overdue ? "border-red-300/90" : "",
+        overdue ? "ring-1 ring-red-400/80" : "",
         dimmed ? "opacity-25" : "",
       ]
         .filter(Boolean)
@@ -326,6 +335,7 @@ export function TaskCanvasCard({
         height: rect.h,
         transform: node.rotation ? `rotate(${node.rotation}deg)` : undefined,
         transformOrigin: "center center",
+        ...(surfaceVars ?? {}),
         zIndex: canvasStackCssZIndex(node, {
           selected: selected || nestTarget,
           hovered,
@@ -443,13 +453,13 @@ export function TaskCanvasCard({
               onBlur={commitTitle}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              className="min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-1.5 py-0.5 text-[13px] font-semibold text-slate-900 outline-none ring-2 ring-sky-200/60"
+              className="min-w-0 flex-1 rounded-md bg-[var(--list-card)] px-1.5 py-0.5 text-[13px] font-semibold text-[var(--list-text)] outline-none ring-2 ring-sky-300/70"
               aria-label="Titel"
             />
           ) : (
             <span
               data-card-title
-              className="flex max-w-full w-fit cursor-text items-start gap-1.5 text-[13px] font-semibold leading-snug text-slate-900"
+              className="flex max-w-full w-fit cursor-text items-start gap-1.5 text-[13px] font-semibold leading-snug text-[var(--list-text)]"
               onPointerDown={(e) => {
                 if (connecting) return;
                 e.stopPropagation();
@@ -465,7 +475,7 @@ export function TaskCanvasCard({
             >
               {!note ? <CardIconBadge icon={node.cardIcon} className="mt-0.5" /> : null}
               <span className="line-clamp-3">
-                {node.title.trim() || <span className="text-slate-400 font-normal italic">Ohne Titel</span>}
+                {node.title.trim() || <span className="text-[var(--list-muted)] font-normal italic">Ohne Titel</span>}
               </span>
             </span>
           )}
@@ -475,7 +485,7 @@ export function TaskCanvasCard({
             <button
               type="button"
               title={`${node.children.length} Unterkarte${node.children.length > 1 ? "n" : ""} — Doppelklick zum Öffnen`}
-              className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors"
+              className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-[var(--list-hover)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--list-muted)] hover:text-[var(--list-text)] transition-colors"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onDrill(); }}
             >
@@ -513,7 +523,7 @@ export function TaskCanvasCard({
         {!note && fieldVisibility.description && node.description.trim() ? (
           <button
             type="button"
-            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md text-left hover:bg-slate-50/80"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md text-left hover:bg-[var(--list-hover)]"
             title={connecting ? "Als Verbindungsziel wählen" : "Beschreibung bearbeiten"}
             onPointerDown={(e) => {
               if (connecting) return;
@@ -536,7 +546,7 @@ export function TaskCanvasCard({
         {note ? (
           <button
             type="button"
-            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md text-left hover:bg-yellow-100/60"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md text-left hover:bg-[var(--list-hover)]"
             title={connecting ? "Als Verbindungsziel wählen" : "Notiz bearbeiten"}
             onPointerDown={(e) => {
               if (connecting) return;
@@ -554,7 +564,7 @@ export function TaskCanvasCard({
             {node.markdown?.trim() ? (
               <NoteMarkdownContent markdown={node.markdown} fillContainer />
             ) : (
-              <p className="px-0.5 text-[11px] italic text-slate-400">
+              <p className="px-0.5 text-[11px] italic text-[var(--list-muted)]">
                 Leere Notiz — klicken zum Bearbeiten
               </p>
             )}
@@ -568,7 +578,7 @@ export function TaskCanvasCard({
               <span
                 className={[
                   "text-[10px] tabular-nums",
-                  overdue ? "font-semibold text-red-600" : "text-slate-500",
+                  overdue ? "font-semibold text-red-600" : "text-[var(--list-muted)]",
                 ].join(" ")}
                 title="Fälligkeit (inkl. Unterkarten)"
               >
@@ -582,7 +592,7 @@ export function TaskCanvasCard({
             ) : null}
             {effortLabel ? (
               <span
-                className="text-[10px] tabular-nums text-slate-600"
+                className="text-[10px] tabular-nums text-[var(--list-muted)]"
                 title="Aufwand inkl. Summe der Unterkarten"
               >
                 Σ {effortLabel}
@@ -597,13 +607,13 @@ export function TaskCanvasCard({
             {visibleTags.map((tag) => (
               <span
                 key={tag}
-                className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
+                className="rounded-full bg-[var(--list-hover)] px-2 py-0.5 text-[10px] font-medium text-[var(--list-muted)]"
               >
                 {tag}
               </span>
             ))}
             {allVisibleTags.length > 4 ? (
-              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400">
+              <span className="rounded-full bg-[var(--list-hover)] px-1.5 py-0.5 text-[10px] text-[var(--list-muted)]">
                 +{allVisibleTags.length - 4}
               </span>
             ) : null}

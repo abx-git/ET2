@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { MouseEvent, PointerEvent } from "react";
 
+import { listSchemeFromAppearance } from "@/lib/board-appearance";
 import { noteAccentClasses } from "@/lib/note-accent";
 import { normalizeNoteMarkdown } from "@/lib/tree-node-kind";
 import { useTaskTreeStore } from "@/store/task-tree-store";
@@ -43,7 +44,7 @@ function markdownComponents(accent: ReturnType<typeof noteAccentClasses>): Compo
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-sky-700 underline decoration-sky-300/80 hover:text-sky-900"
+        className={[accent.markdownLink, "underline decoration-current/40"].join(" ")}
       >
         {children}
       </a>
@@ -92,7 +93,9 @@ export function NoteMarkdownContent({
   className = "",
 }: NoteMarkdownContentProps) {
   const noteAccentColor = useTaskTreeStore((s) => s.noteAccentColor);
-  const accent = noteAccentClasses(noteAccentColor);
+  const appearance = useTaskTreeStore((s) => s.appearance);
+  const listScheme = listSchemeFromAppearance(appearance);
+  const accent = noteAccentClasses(noteAccentColor, listScheme);
   const content = normalizeNoteMarkdown(markdown ?? "");
   if (!content.trim()) return null;
 

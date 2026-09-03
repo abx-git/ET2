@@ -314,9 +314,7 @@ export function TaskRow({
 
   const surface =
     cardColorClass(node.cardColor, listScheme) ??
-    (nestDepth > 0
-      ? "border-[var(--list-border)] bg-[var(--list-card-nested)]"
-      : "border-[var(--list-border)] bg-[var(--list-card)]");
+    (nestDepth > 0 ? "bg-[var(--list-card-nested)]" : "bg-[var(--list-card)]");
   const accent = cardColorAccentClass(node.cardColor);
 
   const menu =
@@ -470,15 +468,15 @@ export function TaskRow({
       }}
       onContextMenu={handleContextMenu}
       className={[
-        "group relative flex touch-none cursor-grab items-stretch gap-1 rounded-lg border px-2 py-2 shadow-[var(--list-shadow)] transition active:cursor-grabbing",
+        "group relative flex touch-none cursor-grab items-stretch gap-1 rounded-lg px-2 py-2 list-card-surface transition active:cursor-grabbing",
         surface,
         isDragging ? "opacity-40" : "",
         isNestDropTarget || isOver
-          ? "border-[var(--list-drop-border)] bg-[var(--list-drop)] ring-2 ring-[var(--list-drop-border)]"
+          ? "bg-[var(--list-drop)] ring-2 ring-[var(--list-drop-border)]"
           : "",
         isSearchFocus ? "ring-2 ring-amber-300/90" : "",
         isKeyboardFocus && !isSearchFocus ? "ring-2 ring-[var(--list-focus)]" : "",
-        isDueOverdue(rollupOverdue ?? null, done) ? "border-red-300/80" : "",
+        isDueOverdue(rollupOverdue ?? null, done) ? "ring-1 ring-red-400/70" : "",
       ].join(" ")}
     >
       {accent ? (
