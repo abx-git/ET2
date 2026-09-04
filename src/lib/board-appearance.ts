@@ -98,6 +98,9 @@ export function appearanceToCssVars(appearance: BoardAppearance): Record<string,
   const listAddText = lightList ? "#0369a1" : "#bae6fd";
   const listDrop = lightList ? "rgba(139, 92, 246, 0.16)" : "rgba(167, 139, 250, 0.28)";
   const listDropBorder = lightList ? "#a78bfa" : "#c4b5fd";
+  const listTarget = lightList ? "#d97706" : "#fbbf24";
+  const listTargetBg = mix(listTarget, lightList ? 255 : 16, lightList ? 0.88 : 0.78);
+  const listTargetText = lightList ? "#92400e" : "#fef3c7";
 
   return {
     "--bg": bg,
@@ -127,6 +130,10 @@ export function appearanceToCssVars(appearance: BoardAppearance): Record<string,
     "--list-add-text": listAddText,
     "--list-drop": listDrop,
     "--list-drop-border": listDropBorder,
+    "--list-target": listTarget,
+    "--list-target-bg": listTargetBg,
+    "--list-target-text": listTargetText,
+    "--list-target-ring": rgba(listTarget, 0.55),
     "--list-shadow": lightList
       ? "0 1px 2px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.06)"
       : "0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.28)",

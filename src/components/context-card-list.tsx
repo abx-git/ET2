@@ -24,12 +24,14 @@ function GapDrop({
   insertIndex,
   large,
   emptyHint,
+  splitHints,
 }: {
   paneId: BoardPaneId;
   listParentId: string | null;
   insertIndex: number;
   large?: boolean;
   emptyHint?: boolean;
+  splitHints?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: contextGapId(listParentId, insertIndex, paneId),
@@ -52,11 +54,39 @@ function GapDrop({
     >
       {emptyHint ? (
         <p className="pointer-events-none text-center text-sm text-[var(--list-muted)]">
-          Keine Einträge hier.{" "}
-          <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">Enter</kbd> /{" "}
-          <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">Tab</kbd> für Karten,{" "}
-          <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">Shift+Enter</kbd> /{" "}
-          <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">Shift+Tab</kbd> für Notizen.
+          {splitHints ? (
+            <>
+              Keine Einträge hier.{" "}
+              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
+                Tab
+              </kbd>{" "}
+              wechselt das Panel,{" "}
+              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
+                Enter
+              </kbd>{" "}
+              legt eine Karte an.
+            </>
+          ) : (
+            <>
+              Keine Einträge hier.{" "}
+              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
+                Enter
+              </kbd>{" "}
+              /{" "}
+              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
+                Tab
+              </kbd>{" "}
+              für Karten,{" "}
+              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
+                Shift+Enter
+              </kbd>{" "}
+              /{" "}
+              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
+                Shift+Tab
+              </kbd>{" "}
+              für Notizen.
+            </>
+          )}
           <span className="mt-2 block text-xs text-[var(--list-muted)] opacity-80">
             Oder Karte aus der Zwischenablage hierher ziehen.
           </span>
@@ -68,6 +98,7 @@ function GapDrop({
 
 type CardBranchSharedProps = {
   paneId: BoardPaneId;
+  paneActive: boolean;
   fieldVisibility: CardFieldVisibility;
   searchFocusNodeId?: string | null;
   keyboardFocusNodeId?: string | null;
@@ -106,6 +137,7 @@ function TreeEntryRow({
 }) {
   const {
     paneId,
+    paneActive,
     fieldVisibility,
     searchFocusNodeId,
     keyboardFocusNodeId,
@@ -135,6 +167,7 @@ function TreeEntryRow({
     interactionMode,
     isSearchFocus: searchFocusNodeId === node.id,
     isKeyboardFocus: keyboardFocusNodeId === node.id,
+    focusMuted: !paneActive,
     isNestDropTarget: nestDropTargetId === node.id,
     onSelect: () => onSelect(node.id),
     onDrillIn: () => onDrillIn(node.id),
@@ -240,6 +273,7 @@ function NestedCardBranch({
 
 export interface ContextCardListProps {
   paneId: BoardPaneId;
+  paneActive?: boolean;
   nodes: TaskNode[];
   /** Parent der angezeigten Liste (`null` = Board-Wurzeln). */
   contextNodeId: string | null;
@@ -253,6 +287,7 @@ export interface ContextCardListProps {
   cardCollapsedIds: ReadonlySet<string>;
   hideCompleted?: boolean;
   completedTag?: string;
+  splitHints?: boolean;
   onSelect: (nodeId: string) => void;
   onDrillIn: (nodeId: string) => void;
   onToggleExpand: (nodeId: string) => void;
@@ -272,6 +307,7 @@ export interface ContextCardListProps {
 
 export function ContextCardList({
   paneId,
+  paneActive = true,
   nodes,
   contextNodeId,
   contextLabel,
@@ -284,6 +320,7 @@ export function ContextCardList({
   cardCollapsedIds,
   hideCompleted,
   completedTag,
+  splitHints = false,
   onSelect,
   onDrillIn,
   onToggleExpand,
@@ -315,6 +352,7 @@ export function ContextCardList({
 
   const shared: CardBranchSharedProps = {
     paneId,
+    paneActive,
     fieldVisibility,
     searchFocusNodeId,
     keyboardFocusNodeId,
@@ -407,6 +445,7 @@ export function ContextCardList({
           insertIndex={0}
           large={nodes.length === 0}
           emptyHint={nodes.length === 0}
+          splitHints={splitHints}
         />
         {nodes.map((node, index) => {
           const collapsed = cardCollapsedIds.has(node.id);

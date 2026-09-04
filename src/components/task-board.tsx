@@ -41,6 +41,7 @@ import {
 import { boardCollisionDetection } from "@/lib/board-dnd-collision";
 import {
   BOARD_PANE_IDS,
+  otherBoardPane,
   type BoardPaneId,
   type PaneContexts,
 } from "@/lib/board-pane";
@@ -117,10 +118,15 @@ import {
   navigateContextCard,
   navigateExpandedCard,
   navigateOutlineTree,
+  recoverPaneListFocus,
   shouldIgnoreCardKeyboard,
 } from "@/lib/card-keyboard-nav";
 import { flattenVisibleCards } from "@/lib/card-expand";
 import { readLightModeEnabled } from "@/lib/light-mode";
+import {
+  splitTransferBlockMessage,
+  splitTransferBlockReason,
+} from "@/lib/split-pane-transfer";
 import {
   contextChildren,
   contextPathNodes,
@@ -161,6 +167,7 @@ import { BoardHeaderMoreMenu } from "./board-header-more-menu";
 import { TagFilterBar } from "./tag-filter-bar";
 import { BetaBadge } from "./beta-badge";
 import { BoardPane } from "./board-pane";
+import { SplitCommanderBar } from "./split-commander-bar";
 import { BreadcrumbTrail } from "./breadcrumb-trail";
 import { ClipboardDropTarget } from "./clipboard-drop-target";
 import { ClipboardSidebar } from "./clipboard-sidebar";
@@ -239,6 +246,7 @@ export function TaskBoard() {
   );
   /** Split View nur Desktop; Einstellung bleibt im Store erhalten. */
   const showSplitView = splitViewEnabled && !isMobileLayout;
+  const commanderSplit = showSplitView && boardViewMode === "list" && !lightModeEnabled;
   const setContextNodeId = useTaskTreeStore((s) => s.setContextNodeId);
   const drillIntoNode = useTaskTreeStore((s) => s.drillIntoNode);
   const drillUp = useTaskTreeStore((s) => s.drillUp);
@@ -255,6 +263,8 @@ export function TaskBoard() {
   const updateCard = useTaskTreeStore((s) => s.updateCard);
   const updateNote = useTaskTreeStore((s) => s.updateNote);
   const removeCard = useTaskTreeStore((s) => s.removeCard);
+  const copyNodeToPaneContext = useTaskTreeStore((s) => s.copyNodeToPaneContext);
+  const moveNodeToPaneContext = useTaskTreeStore((s) => s.moveNodeToPaneContext);
   const convertCardToNote = useTaskTreeStore((s) => s.convertCardToNote);
   const columnTitleOverrides = useTaskTreeStore((s) => s.columnTitleOverrides);
   const importSubtreeRoot = useTaskTreeStore((s) => s.importSubtreeRoot);
@@ -299,6 +309,10 @@ export function TaskBoard() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorNodeId, setEditorNodeId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingTransfer, setPendingTransfer] = useState<{
+    kind: "copy" | "move";
+    nodeId: string;
+  } | null>(null);
   const [cardFieldsOpen, setCardFieldsOpen] = useState(false);
   const [tagRenameOpen, setTagRenameOpen] = useState(false);
   const [pendingBoardImport, setPendingBoardImport] = useState<BoardSnapshotV1 | null>(null);
@@ -1208,6 +1222,17 @@ export function TaskBoard() {
 
   const visibleExpandCards = visibleExpandCardsByPane[activePane];
 
+  const visibleIdsByPane = useMemo(() => {
+    const result = {} as Record<BoardPaneId, string[]>;
+    for (const pane of BOARD_PANE_IDS) {
+      result[pane] =
+        cardInteractionMode === "expand"
+          ? visibleExpandCardsByPane[pane].map((row) => row.node.id)
+          : contextListNodesByPane[pane].map((n) => n.id);
+    }
+    return result;
+  }, [cardInteractionMode, visibleExpandCardsByPane, contextListNodesByPane]);
+
   const breadcrumbPathByPane = useMemo(() => {
     const result = {} as Record<BoardPaneId, TaskNode[]>;
     for (const pane of BOARD_PANE_IDS) {
@@ -1230,6 +1255,44 @@ export function TaskBoard() {
     return result;
   }, [roots, contextByPane]);
 
+  const paneNavSnapshotRef = useRef({
+    roots,
+    visibleIdsByPane,
+    contextByPane,
+  });
+
+  useEffect(() => {
+    const prev = paneNavSnapshotRef.current;
+    const listsChanged = BOARD_PANE_IDS.some((pane) => {
+      const a = prev.visibleIdsByPane[pane] ?? [];
+      const b = visibleIdsByPane[pane] ?? [];
+      if (a.length !== b.length) return true;
+      return a.some((id, i) => id !== b[i]);
+    });
+    if (prev.roots !== roots || listsChanged) {
+      setKeyboardFocusByPane((current) => {
+        const next = { ...current };
+        let changed = false;
+        for (const pane of BOARD_PANE_IDS) {
+          const recovered = recoverPaneListFocus({
+            previousIds: prev.visibleIdsByPane[pane] ?? [],
+            nextIds: visibleIdsByPane[pane] ?? [],
+            previousFocusId: current[pane],
+            previousContextId: prev.contextByPane[pane],
+            previousRoots: prev.roots,
+            nextRoots: roots,
+          });
+          if (recovered !== current[pane]) {
+            next[pane] = recovered;
+            changed = true;
+          }
+        }
+        return changed ? next : current;
+      });
+    }
+    paneNavSnapshotRef.current = { roots, visibleIdsByPane, contextByPane };
+  }, [roots, visibleIdsByPane, contextByPane]);
+
   const editingNode = editorNodeId ? findNodeById(roots, editorNodeId) : null;
   const editingIsNote = editingNode ? isNoteNode(editingNode) : false;
 
@@ -1240,6 +1303,7 @@ export function TaskBoard() {
     titleEditNodeId !== null ||
     editorOpen ||
     pendingDeleteId !== null ||
+    pendingTransfer !== null ||
     activeDragId !== null ||
     cardFieldsOpen ||
     tagRenameOpen ||
@@ -1273,6 +1337,41 @@ export function TaskBoard() {
         return;
       }
 
+      if (commanderSplit && e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const next = otherBoardPane(activePane);
+        setActivePane(next);
+        const ids = visibleIdsByPane[next] ?? [];
+        const existing = keyboardFocusByPane[next];
+        if (existing && ids.includes(existing)) {
+          setScrollToNodeId(existing);
+        } else if (ids[0]) {
+          setKeyboardFocusNodeId(ids[0], next);
+          setScrollToNodeId(ids[0]);
+        }
+        return;
+      }
+
+      if (
+        commanderSplit &&
+        (e.key === "F5" || e.key === "F6") &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey
+      ) {
+        e.preventDefault();
+        const sourceId = keyboardFocusByPane[activePane];
+        const targetCtx = contextByPane[otherBoardPane(activePane)];
+        const kind = e.key === "F5" ? "copy" : "move";
+        const block = splitTransferBlockReason(roots, sourceId, targetCtx, kind);
+        if (block) {
+          window.alert(splitTransferBlockMessage(block));
+          return;
+        }
+        if (sourceId) setPendingTransfer({ kind, nodeId: sourceId });
+        return;
+      }
+
       const arrowKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"] as const;
       const isArrow = arrowKeys.includes(e.key as (typeof arrowKeys)[number]);
 
@@ -1286,14 +1385,14 @@ export function TaskBoard() {
         if (!currentId) return;
       } else if (!currentId) {
         if (
-          lightModeEnabled &&
+          (lightModeEnabled || commanderSplit) &&
           e.key === "Enter" &&
           !e.metaKey &&
           !e.ctrlKey &&
           !e.shiftKey
         ) {
           e.preventDefault();
-          const id = addCardAfter(null);
+          const id = addCardAfter(lightModeEnabled ? null : contextNodeId);
           beginEditingNewCard(id);
         }
         return;
@@ -1404,6 +1503,38 @@ export function TaskBoard() {
 
       if (e.key === "Tab" && !e.altKey) {
         e.preventDefault();
+        if (commanderSplit && (e.metaKey || e.ctrlKey)) {
+          if (e.shiftKey) {
+            const id = addNoteAfter(currentId);
+            expandToNode(id);
+            beginEditingNewNote(id);
+            return;
+          }
+          const id = addCardAfter(currentId);
+          expandToNode(id);
+          beginEditingNewCard(id);
+          return;
+        }
+        if (commanderSplit) return;
+        if (e.shiftKey) {
+          const id = addNoteAfter(currentId);
+          expandToNode(id);
+          beginEditingNewNote(id);
+          return;
+        }
+        const id = addCardAfter(currentId);
+        expandToNode(id);
+        beginEditingNewCard(id);
+        return;
+      }
+
+      if (
+        commanderSplit &&
+        e.key === "Enter" &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey
+      ) {
+        e.preventDefault();
         if (e.shiftKey) {
           const id = addNoteAfter(currentId);
           expandToNode(id);
@@ -1469,6 +1600,13 @@ export function TaskBoard() {
     completedTag,
     toggleCardCollapsed,
     toggleNodeCollapsed,
+    commanderSplit,
+    activePane,
+    setActivePane,
+    visibleIdsByPane,
+    keyboardFocusByPane,
+    contextByPane,
+    roots,
     addCardAfterSibling,
     addCardAfter,
     addNoteAfterSibling,
@@ -1509,9 +1647,6 @@ export function TaskBoard() {
   }, [setLightModeEnabled]);
 
   useEffect(() => {
-    if (keyboardFocusNodeId && !findNodeById(roots, keyboardFocusNodeId)) {
-      setKeyboardFocusNodeId(null);
-    }
     if (searchFocusNodeId && !findNodeById(roots, searchFocusNodeId)) {
       setSearchFocusNodeId(null);
     }
@@ -1522,7 +1657,7 @@ export function TaskBoard() {
       setEditorOpen(false);
       setEditorNodeId(null);
     }
-  }, [roots, keyboardFocusNodeId, searchFocusNodeId, titleEditNodeId, editorNodeId]);
+  }, [roots, searchFocusNodeId, titleEditNodeId, editorNodeId]);
 
   const boardJsonExportText = useMemo(() => {
     const s = useTaskTreeStore.getState();
@@ -1662,6 +1797,22 @@ export function TaskBoard() {
     [setLightModeEnabled],
   );
 
+  const targetPane = otherBoardPane(activePane);
+  const transferSourceId = keyboardFocusByPane[activePane];
+  const transferTargetContext = contextByPane[targetPane];
+  const copyBlock = splitTransferBlockReason(roots, transferSourceId, transferTargetContext, "copy");
+  const moveBlock = splitTransferBlockReason(roots, transferSourceId, transferTargetContext, "move");
+  const transferSourceNode = transferSourceId ? findNodeById(roots, transferSourceId) : null;
+  const transferSourceTitle = transferSourceNode ? nodeDisplayTitle(transferSourceNode) : "Eintrag";
+  const requestSplitTransfer = (kind: "copy" | "move") => {
+    const block = kind === "copy" ? copyBlock : moveBlock;
+    if (block) {
+      window.alert(splitTransferBlockMessage(block));
+      return;
+    }
+    if (transferSourceId) setPendingTransfer({ kind, nodeId: transferSourceId });
+  };
+
   const renderPane = (paneId: BoardPaneId) => {
     const ctx = contextByPane[paneId];
     const nodes = contextListNodesByPane[paneId];
@@ -1671,6 +1822,8 @@ export function TaskBoard() {
         key={paneId}
         paneId={paneId}
         active={isActive}
+        transferRole={commanderSplit ? (isActive ? "source" : "target") : null}
+        itemCount={nodes.length}
         dragging={Boolean(activeDragId)}
         contextNodeId={ctx}
         breadcrumbPath={breadcrumbPathByPane[paneId]}
@@ -1686,6 +1839,7 @@ export function TaskBoard() {
         cardCollapsedIds={cardCollapsedSet}
         hideCompleted={hideCompletedTasks}
         completedTag={completedTag}
+        splitHints={commanderSplit}
         onActivate={() => setActivePane(paneId)}
         onNavigateRoot={() => {
           setActivePane(paneId);
@@ -2038,13 +2192,34 @@ export function TaskBoard() {
                     ) : boardViewMode === "presentation" ? (
                       <TaskPresentation />
                     ) : showSplitView ? (
-                      <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
-                        {renderPane("left")}
-                        <div
-                          className="w-px shrink-0 bg-[var(--list-border)]"
-                          aria-hidden
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                        <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
+                          {renderPane("left")}
+                          <div
+                            className="w-1 shrink-0 bg-[var(--list-border)]"
+                            aria-hidden
+                          />
+                          {renderPane("right")}
+                        </div>
+                        <SplitCommanderBar
+                          sourceLabel={contextLabelByPane[activePane]}
+                          targetLabel={contextLabelByPane[targetPane]}
+                          sourceTitle={transferSourceTitle}
+                          copyEnabled={!copyBlock}
+                          moveEnabled={!moveBlock}
+                          copyHint={
+                            copyBlock
+                              ? splitTransferBlockMessage(copyBlock)
+                              : `„${transferSourceTitle}“ nach ${contextLabelByPane[targetPane]} kopieren`
+                          }
+                          moveHint={
+                            moveBlock
+                              ? splitTransferBlockMessage(moveBlock)
+                              : `„${transferSourceTitle}“ nach ${contextLabelByPane[targetPane]} verschieben`
+                          }
+                          onCopy={() => requestSplitTransfer("copy")}
+                          onMove={() => requestSplitTransfer("move")}
                         />
-                        {renderPane("right")}
                       </div>
                     ) : (
                       renderPane(activePane)
@@ -2437,6 +2612,41 @@ export function TaskBoard() {
             setScrollToNodeId(nextFocus);
           } else {
             setKeyboardFocusNodeId(null);
+          }
+        }}
+      />
+      <ConfirmDialog
+        open={pendingTransfer !== null}
+        title={pendingTransfer?.kind === "copy" ? "In das Ziel-Panel kopieren?" : "In das Ziel-Panel verschieben?"}
+        message={
+          pendingTransfer
+            ? `„${findNodeById(roots, pendingTransfer.nodeId) ? nodeDisplayTitle(findNodeById(roots, pendingTransfer.nodeId)!) : "Dieser Eintrag"}“ ${
+                pendingTransfer.kind === "copy" ? "kopieren" : "verschieben"
+              } nach „${contextLabelByPane[targetPane]}“.`
+            : ""
+        }
+        confirmLabel={pendingTransfer?.kind === "copy" ? "Kopieren" : "Verschieben"}
+        confirmClassName={
+          pendingTransfer?.kind === "copy"
+            ? "rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700"
+            : "rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+        }
+        onCancel={() => setPendingTransfer(null)}
+        onConfirm={() => {
+          const pending = pendingTransfer;
+          setPendingTransfer(null);
+          if (!pending) return;
+          const destPane = otherBoardPane(activePane);
+          const destContext = contextByPane[destPane];
+          if (pending.kind === "copy") {
+            const newId = copyNodeToPaneContext(pending.nodeId, destContext);
+            if (newId) {
+              setKeyboardFocusNodeId(newId, destPane);
+            }
+            return;
+          }
+          if (moveNodeToPaneContext(pending.nodeId, destContext)) {
+            setKeyboardFocusNodeId(pending.nodeId, destPane);
           }
         }}
       />

@@ -3,6 +3,7 @@
  */
 
 import { normalizeContextNodeId } from "@/lib/board-context";
+import { findNodeById, pathFromRootToNode } from "@/lib/tree-utils";
 import type { TaskNode } from "@/types/task-node";
 
 export type BoardPaneId = "left" | "right";
@@ -17,10 +18,43 @@ export function isBoardPaneId(value: unknown): value is BoardPaneId {
   return value === "left" || value === "right";
 }
 
-export function normalizePaneContexts(roots: TaskNode[], contexts: PaneContexts): PaneContexts {
+export function otherBoardPane(pane: BoardPaneId): BoardPaneId {
+  return pane === "left" ? "right" : "left";
+}
+
+/**
+ * Kontext nach Baumänderungen: existierender Ordner bleibt,
+ * verschwundener Ordner → nächster noch vorhandener Vorfahr (nicht die Wurzel, wenn ein Parent lebt).
+ */
+export function recoverContextAfterRemoval(
+  previousRoots: TaskNode[],
+  nextRoots: TaskNode[],
+  contextId: string | null,
+): string | null {
+  if (!contextId) return null;
+  if (findNodeById(nextRoots, contextId)) return contextId;
+  const path = pathFromRootToNode(previousRoots, contextId) ?? [];
+  for (let i = path.length - 2; i >= 0; i--) {
+    const id = path[i];
+    if (id && findNodeById(nextRoots, id)) return id;
+  }
+  return null;
+}
+
+export function normalizePaneContexts(
+  nextRoots: TaskNode[],
+  contexts: PaneContexts,
+  previousRoots: TaskNode[] = nextRoots,
+): PaneContexts {
+  if (previousRoots === nextRoots) {
+    return {
+      left: normalizeContextNodeId(nextRoots, contexts.left),
+      right: normalizeContextNodeId(nextRoots, contexts.right),
+    };
+  }
   return {
-    left: normalizeContextNodeId(roots, contexts.left),
-    right: normalizeContextNodeId(roots, contexts.right),
+    left: recoverContextAfterRemoval(previousRoots, nextRoots, contexts.left),
+    right: recoverContextAfterRemoval(previousRoots, nextRoots, contexts.right),
   };
 }
 

@@ -54,6 +54,8 @@ export interface NoteRowProps {
   paneId: BoardPaneId;
   isSearchFocus?: boolean;
   isKeyboardFocus?: boolean;
+  /** Cursor im inaktiven Split-Panel (gedimmt). */
+  focusMuted?: boolean;
   isNestDropTarget?: boolean;
   nestDepth?: number;
   isCollapsed?: boolean;
@@ -73,6 +75,7 @@ export function NoteRow({
   paneId,
   isSearchFocus = false,
   isKeyboardFocus = false,
+  focusMuted = false,
   isNestDropTarget = false,
   nestDepth = 0,
   isCollapsed = true,
@@ -261,7 +264,11 @@ export function NoteRow({
         isDragging ? "opacity-40" : "",
         isNestDropTarget || isOver ? accent.nestDrop : "",
         isSearchFocus ? "ring-2 ring-amber-300/90" : "",
-        isKeyboardFocus && !isSearchFocus ? accent.keyboardRing : "",
+        isKeyboardFocus && !isSearchFocus
+          ? focusMuted
+            ? "ring-1 ring-dashed ring-[var(--list-muted)]"
+            : accent.keyboardRing
+          : "",
       ].join(" ")}
     >
       <span

@@ -101,6 +101,7 @@ import type { CanvasGroup } from "@/lib/canvas-group";
 import { defaultGroupColor, parseCanvasGroupsMap, parseGroupColor } from "@/lib/canvas-group";
 import { applyGeometryPatches, computeAlignPatches, type AlignMode } from "@/lib/element-align";
 import { duplicateCanvasNodes } from "@/lib/canvas-duplicate";
+import { copyNodeToContext, moveNodeToContext } from "@/lib/split-pane-transfer";
 import {
   computeCanvasZIndexPatches,
   type CanvasZAction,
@@ -445,6 +446,10 @@ export interface TaskTreeState {
   convertCardToNote: (nodeId: string) => void;
   /** Entfernt die Karte inkl. gesamtem Unterbaum. */
   removeCard: (nodeId: string) => void;
+  /** Teilbaum in den Kontext-Ordner eines anderen Panels kopieren. Liefert die neue ID. */
+  copyNodeToPaneContext: (nodeId: string, targetContextId: string | null) => string | null;
+  /** Teilbaum in den Kontext-Ordner eines anderen Panels verschieben. */
+  moveNodeToPaneContext: (nodeId: string, targetContextId: string | null) => boolean;
   /** Karte(n) in die Zwischenablage verschieben. */
   moveNodesToClipboard: (nodeIds: string[]) => void;
 
@@ -653,7 +658,7 @@ function cleanupAfterSubtreeRemoved(
 ): Partial<TaskTreeState> {
   const collapsedIds = state.collapsedIds.filter((id) => !removedIds.has(id));
   const cardCollapsedIds = state.cardCollapsedIds.filter((id) => !removedIds.has(id));
-  const contextByPane = normalizePaneContexts(nextRoots, state.contextByPane);
+  const contextByPane = normalizePaneContexts(nextRoots, state.contextByPane, state.roots);
   return {
     roots: nextRoots,
     pathIds: normalizePathIds(nextRoots, state.pathIds),
@@ -1106,7 +1111,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
         s.completedTag,
       );
       const nextPath = pathIdsAfterNodeMove(nextRoots, activeId, s.pathIds);
-      const contextByPane = normalizePaneContexts(nextRoots, s.contextByPane);
+      const contextByPane = normalizePaneContexts(nextRoots, s.contextByPane, s.roots);
       return {
         roots: nextRoots,
         pathIds: nextPath,
@@ -1122,7 +1127,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
     const nextRoots = refreshCalculatedEffortsInTree(moved.roots, current.completedTag);
     const navigateSiblingsOnly =
       !current.lightModeEnabled && current.cardInteractionMode === "navigate";
-    let contextByPane = normalizePaneContexts(nextRoots, current.contextByPane);
+    let contextByPane = normalizePaneContexts(nextRoots, current.contextByPane, current.roots);
     const activeContext = contextByPane[current.activePane];
     if (!isCardVisibleInListContext(nextRoots, nodeId, activeContext, navigateSiblingsOnly)) {
       contextByPane = { ...contextByPane, [current.activePane]: moved.parentId };
@@ -1144,7 +1149,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
       );
       if (nextRoots === s.roots) return {};
       const nextPath = pathIdsAfterNodeMove(nextRoots, activeId, s.pathIds);
-      const contextByPane = normalizePaneContexts(nextRoots, s.contextByPane);
+      const contextByPane = normalizePaneContexts(nextRoots, s.contextByPane, s.roots);
       return {
         roots: nextRoots,
         pathIds: nextPath,
@@ -1191,7 +1196,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
         );
         if (boardNext === s.roots) return {};
         const nextPath = pathIdsAfterNodeMove(boardNext, detached.id, s.pathIds);
-        const contextByPane = normalizePaneContexts(boardNext, s.contextByPane);
+        const contextByPane = normalizePaneContexts(boardNext, s.contextByPane, s.roots);
         return {
           roots: boardNext,
           pathIds: nextPath,
@@ -1209,7 +1214,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
         );
         if (boardNext === s.roots) return {};
         const nextPath = pathIdsAfterNodeMove(boardNext, detached.id, s.pathIds);
-        const contextByPane = normalizePaneContexts(boardNext, s.contextByPane);
+        const contextByPane = normalizePaneContexts(boardNext, s.contextByPane, s.roots);
         return {
           roots: boardNext,
           pathIds: nextPath,
@@ -1235,7 +1240,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
         });
         boardNext = refreshCalculatedEffortsInTree(boardNext, s.completedTag);
         const nextPath = pathIdsAfterNodeMove(boardNext, detached.id, s.pathIds);
-        const contextByPane = normalizePaneContexts(boardNext, s.contextByPane);
+        const contextByPane = normalizePaneContexts(boardNext, s.contextByPane, s.roots);
         return {
           roots: boardNext,
           pathIds: nextPath,
@@ -1653,7 +1658,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
       const nextRoots = refreshCalculatedEffortsInTree(next, s.completedTag);
       const collapsedIds = s.collapsedIds.filter((id) => !removedIds.has(id));
       const cardCollapsedIds = s.cardCollapsedIds.filter((id) => !removedIds.has(id));
-      const contextByPane = normalizePaneContexts(nextRoots, s.contextByPane);
+      const contextByPane = normalizePaneContexts(nextRoots, s.contextByPane, s.roots);
       return {
         roots: nextRoots,
         pathIds: normalizePathIds(nextRoots, s.pathIds),
@@ -1673,6 +1678,46 @@ export const useTaskTreeStore = create<TaskTreeState>()(
         ...syncActiveContext(contextByPane, s.activePane),
       };
     });
+  },
+
+  copyNodeToPaneContext: (nodeId, targetContextId) => {
+    let newId: string | null = null;
+    set((s) => {
+      const result = copyNodeToContext(
+        s.roots,
+        s.relations,
+        nodeId,
+        targetContextId,
+        s.clipboardRoots,
+      );
+      if (!result) return {};
+      newId = result.newId;
+      const nextRoots = refreshCalculatedEffortsInTree(result.roots, s.completedTag);
+      return {
+        roots: nextRoots,
+        pathIds: normalizePathIds(nextRoots, s.pathIds),
+        relations: sanitizeRelations(nextRoots, result.relations),
+      };
+    });
+    return newId;
+  },
+
+  moveNodeToPaneContext: (nodeId, targetContextId) => {
+    let moved = false;
+    set((s) => {
+      const result = moveNodeToContext(s.roots, nodeId, targetContextId);
+      if (!result) return {};
+      moved = true;
+      const nextRoots = refreshCalculatedEffortsInTree(result.roots, s.completedTag);
+      const contextByPane = normalizePaneContexts(nextRoots, s.contextByPane, s.roots);
+      return {
+        roots: nextRoots,
+        pathIds: pathIdsAfterNodeMove(nextRoots, nodeId, s.pathIds),
+        relations: sanitizeRelations(nextRoots, s.relations),
+        ...syncActiveContext(contextByPane, s.activePane),
+      };
+    });
+    return moved;
   },
 
   moveNodesToClipboard: (nodeIds) => {
@@ -1715,7 +1760,7 @@ export const useTaskTreeStore = create<TaskTreeState>()(
       const currentPath = normalizePathIds(roots, s.pathIds);
       const pathIds =
         s.pathIds.length === 0 ? currentPath : currentPath.length > 0 ? currentPath : content.pathIds;
-      const contextByPane = normalizePaneContexts(roots, s.contextByPane);
+      const contextByPane = normalizePaneContexts(roots, s.contextByPane, s.roots);
       const liveIds = collectAllNodeIds(roots);
       const selectedCanvasNodeIds = s.selectedCanvasNodeIds.filter((id) => liveIds.has(id));
       const selectedCanvasNodeId =

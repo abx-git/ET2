@@ -5,9 +5,11 @@ import {
   focusTargetAfterRemoving,
   isCardVisibleInListContext,
   moveCardWithKeyboard,
+  nearestRemainingId,
   navigateContextCard,
   navigateExpandedCard,
   navigateOutlineTree,
+  recoverPaneListFocus,
 } from "@/lib/card-keyboard-nav";
 import { flattenVisibleCards } from "@/lib/card-expand";
 import type { TaskNode } from "@/types/task-node";
@@ -113,12 +115,48 @@ describe("navigateOutlineTree", () => {
 describe("focusTargetAfterRemoving", () => {
   const roots = [node("a", "A", [node("b", "B"), node("c", "C")])];
 
-  it("bevorzugt vorherige Geschwisterkarte", () => {
+  it("bevorzugt vorherige Geschwisterkarte am Listenende", () => {
     expect(focusTargetAfterRemoving(roots, "c")).toBe("b");
+  });
+
+  it("behält die visuelle Position (nächstes Geschwister)", () => {
+    expect(focusTargetAfterRemoving([node("a", "A"), node("b", "B"), node("c", "C")], "b")).toBe(
+      "c",
+    );
   });
 
   it("fällt auf Parent zurück ohne Geschwister", () => {
     expect(focusTargetAfterRemoving([node("a", "A", [node("b", "B")])], "b")).toBe("a");
+  });
+});
+
+describe("nearestRemainingId / recoverPaneListFocus", () => {
+  it("nimmt den Nachfolger, sonst den Vorgänger", () => {
+    expect(nearestRemainingId(["a", "b", "c"], ["a", "c"], "b")).toBe("c");
+    expect(nearestRemainingId(["a", "b", "c"], ["a", "b"], "c")).toBe("b");
+    expect(nearestRemainingId(["a", "b", "c"], ["b", "c"], "a")).toBe("b");
+  });
+
+  it("springt nicht an den Listenanfang, wenn ein Nachbar bleibt", () => {
+    expect(nearestRemainingId(["a", "b", "c", "d"], ["a", "b", "d"], "c")).toBe("d");
+    expect(nearestRemainingId(["a", "b", "c", "d"], ["a", "b", "c", "d"], "c")).toBe("c");
+  });
+
+  it("fokussiert nach gelöschtem Kontext-Ordner den Nachbarn in der Elternebene", () => {
+    const previousRoots = [
+      node("p", "P", [node("a", "A"), node("b", "B", [node("b1", "B1")]), node("c", "C")]),
+    ];
+    const nextRoots = [node("p", "P", [node("a", "A"), node("c", "C")])];
+    expect(
+      recoverPaneListFocus({
+        previousIds: ["b1"],
+        nextIds: ["a", "c"],
+        previousFocusId: "b1",
+        previousContextId: "b",
+        previousRoots,
+        nextRoots,
+      }),
+    ).toBe("c");
   });
 });
 

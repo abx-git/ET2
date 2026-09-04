@@ -126,14 +126,113 @@ export function focusTargetAfterRemoving(
   removedId: string,
   preferredSiblingId?: string | null,
 ): string | null {
-  if (preferredSiblingId && findNodeById(roots, preferredSiblingId)) {
+  if (
+    preferredSiblingId &&
+    preferredSiblingId !== removedId &&
+    findNodeById(roots, preferredSiblingId)
+  ) {
     return preferredSiblingId;
   }
   const parentResult = findDirectParentId(roots, removedId);
   if (parentResult === undefined) return null;
-  const siblings = getSiblingsList(roots, parentResult).filter((s) => s.id !== removedId);
-  if (siblings.length > 0) return siblings[0].id;
+  const siblings = getSiblingsList(roots, parentResult);
+  const idx = siblings.findIndex((s) => s.id === removedId);
+  if (idx >= 0) {
+    const next = siblings[idx + 1];
+    if (next) return next.id;
+    const prev = siblings[idx - 1];
+    if (prev) return prev.id;
+  }
   return parentResult;
+}
+
+/**
+ * Nächster Eintrag in einer sichtbaren Liste, wenn `lostId` verschwindet:
+ * erst der Nachfolger (gleiche visuelle Position), sonst der Vorgänger.
+ * Springt nicht an den Listenanfang, nur weil etwas gelöscht wurde.
+ */
+export function nearestRemainingId(
+  previousIds: readonly string[],
+  nextIds: readonly string[],
+  lostId: string | null,
+): string | null {
+  const nextSet = new Set(nextIds);
+  if (lostId && nextSet.has(lostId)) return lostId;
+  if (!lostId) return null;
+  const idx = previousIds.indexOf(lostId);
+  if (idx >= 0) {
+    for (let i = idx + 1; i < previousIds.length; i++) {
+      const id = previousIds[i];
+      if (id && nextSet.has(id)) return id;
+    }
+    for (let i = idx - 1; i >= 0; i--) {
+      const id = previousIds[i];
+      if (id && nextSet.has(id)) return id;
+    }
+  }
+  for (const id of previousIds) {
+    if (nextSet.has(id)) return id;
+  }
+  return null;
+}
+
+export type RecoverPaneListFocusArgs = {
+  previousIds: readonly string[];
+  nextIds: readonly string[];
+  previousFocusId: string | null;
+  previousContextId: string | null;
+  previousRoots: TaskNode[];
+  nextRoots: TaskNode[];
+};
+
+/**
+ * Fokus in einem Split-Panel halten, wenn der Baum sich ändert.
+ * Verschwundene Einträge → Nachbar in derselben Liste; verschwundener
+ * Kontext-Ordner → Nachbar des Ordners in der neuen (Eltern-)Liste.
+ */
+export function recoverPaneListFocus({
+  previousIds,
+  nextIds,
+  previousFocusId,
+  previousContextId,
+  previousRoots,
+  nextRoots,
+}: RecoverPaneListFocusArgs): string | null {
+  const nextSet = new Set(nextIds);
+  if (previousFocusId && nextSet.has(previousFocusId)) return previousFocusId;
+
+  if (previousFocusId && previousIds.includes(previousFocusId)) {
+    const nearby = nearestRemainingId(previousIds, nextIds, previousFocusId);
+    if (nearby) return nearby;
+  }
+
+  if (previousContextId && !findNodeById(nextRoots, previousContextId)) {
+    const parent = findDirectParentId(previousRoots, previousContextId);
+    if (parent !== undefined) {
+      const oldSiblingIds = getSiblingsList(previousRoots, parent).map((n) => n.id);
+      const nearby = nearestRemainingId(oldSiblingIds, nextIds, previousContextId);
+      if (nearby) return nearby;
+    }
+  }
+
+  if (previousFocusId && !findNodeById(nextRoots, previousFocusId)) {
+    let candidate = focusTargetAfterRemoving(previousRoots, previousFocusId);
+    const seen = new Set<string>([previousFocusId]);
+    while (candidate && !nextSet.has(candidate) && !seen.has(candidate)) {
+      seen.add(candidate);
+      if (!findNodeById(nextRoots, candidate)) {
+        candidate = focusTargetAfterRemoving(previousRoots, candidate);
+        continue;
+      }
+      break;
+    }
+    if (candidate && nextSet.has(candidate)) return candidate;
+  }
+
+  if (previousFocusId && findNodeById(nextRoots, previousFocusId)) {
+    return previousFocusId;
+  }
+  return null;
 }
 
 export type KeyboardCardMove = {

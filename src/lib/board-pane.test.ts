@@ -4,7 +4,9 @@ import {
   BOARD_PANE_IDS,
   DEFAULT_PANE_CONTEXTS,
   normalizePaneContexts,
+  otherBoardPane,
   parseContextPanePrefixedId,
+  recoverContextAfterRemoval,
   stripContextPanePrefix,
   withContextPanePrefix,
 } from "@/lib/board-pane";
@@ -44,6 +46,57 @@ describe("board-pane ids", () => {
     expect(
       normalizePaneContexts(roots, { left: "a", right: "gone" }),
     ).toEqual({ left: "a", right: null });
+  });
+
+  it("toggles the other pane", () => {
+    expect(otherBoardPane("left")).toBe("right");
+    expect(otherBoardPane("right")).toBe("left");
+  });
+
+  it("recovers context to the remaining parent instead of the board root", () => {
+    const previous = [
+      {
+        id: "p",
+        title: "P",
+        link: "",
+        description: "",
+        tags: [],
+        dueDate: null,
+        reminderDate: null,
+        effort: 0,
+        children: [
+          {
+            id: "b",
+            title: "B",
+            link: "",
+            description: "",
+            tags: [],
+            dueDate: null,
+            reminderDate: null,
+            effort: 0,
+            children: [],
+          },
+        ],
+      },
+    ];
+    const next = [
+      {
+        id: "p",
+        title: "P",
+        link: "",
+        description: "",
+        tags: [],
+        dueDate: null,
+        reminderDate: null,
+        effort: 0,
+        children: [],
+      },
+    ];
+    expect(recoverContextAfterRemoval(previous, next, "b")).toBe("p");
+    expect(normalizePaneContexts(next, { left: "b", right: "b" }, previous)).toEqual({
+      left: "p",
+      right: "p",
+    });
   });
 });
 
@@ -91,6 +144,20 @@ describe("dual pane store navigation", () => {
     expect(useTaskTreeStore.getState().contextNodeId).toBe(parentL);
   });
 
+  it("recovers pane context to the parent when a drilled folder is removed", () => {
+    const parent = useTaskTreeStore.getState().addCardAfter(null);
+    useTaskTreeStore.getState().updateCard(parent, { title: "P" });
+    const child = useTaskTreeStore.getState().addCardAfter(parent);
+    useTaskTreeStore.getState().updateCard(child, { title: "B" });
+    useTaskTreeStore.getState().setContextNodeId(child, "right");
+    useTaskTreeStore.getState().setContextNodeId(parent, "left");
+    useTaskTreeStore.getState().removeCard(child);
+
+    const s = useTaskTreeStore.getState();
+    expect(s.contextByPane.right).toBe(parent);
+    expect(s.contextByPane.left).toBe(parent);
+  });
+
   it("normalizes both panes when a context node is removed", () => {
     const parent = useTaskTreeStore.getState().addCardAfter(null);
     useTaskTreeStore.getState().updateCard(parent, { title: "P" });
@@ -101,6 +168,32 @@ describe("dual pane store navigation", () => {
     const s = useTaskTreeStore.getState();
     expect(s.contextByPane).toEqual({ left: null, right: null });
     expect(s.contextNodeId).toBeNull();
+  });
+
+  it("copies and moves between pane contexts", () => {
+    const left = useTaskTreeStore.getState().addCardAfter(null);
+    useTaskTreeStore.getState().updateCard(left, { title: "LeftFolder" });
+    const right = useTaskTreeStore.getState().addCardAfter(null);
+    useTaskTreeStore.getState().updateCard(right, { title: "RightFolder" });
+    const item = useTaskTreeStore.getState().addCardAfter(left);
+    useTaskTreeStore.getState().updateCard(item, { title: "Item" });
+    clearBoardHistory();
+
+    const copied = useTaskTreeStore.getState().copyNodeToPaneContext(item, right);
+    expect(copied).toBeTruthy();
+    expect(copied).not.toBe(item);
+    const afterCopy = useTaskTreeStore.getState();
+    expect(afterCopy.roots.find((n) => n.id === right)?.children.map((n) => n.title)).toContain(
+      "Item",
+    );
+    expect(afterCopy.roots.find((n) => n.id === left)?.children.map((n) => n.id)).toContain(item);
+
+    expect(useTaskTreeStore.getState().moveNodeToPaneContext(item, right)).toBe(true);
+    const afterMove = useTaskTreeStore.getState();
+    expect(afterMove.roots.find((n) => n.id === left)?.children.map((n) => n.id)).not.toContain(
+      item,
+    );
+    expect(afterMove.roots.find((n) => n.id === right)?.children.map((n) => n.id)).toContain(item);
   });
 
   it("toggles split without changing contexts", () => {

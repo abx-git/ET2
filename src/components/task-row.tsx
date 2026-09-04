@@ -88,6 +88,8 @@ export interface TaskRowProps {
   paneId: BoardPaneId;
   isSearchFocus?: boolean;
   isKeyboardFocus?: boolean;
+  /** Cursor im inaktiven Split-Panel (gedimmt). */
+  focusMuted?: boolean;
   isNestDropTarget?: boolean;
   fieldVisibility: CardFieldVisibility;
   isTitleEditing?: boolean;
@@ -119,6 +121,7 @@ export function TaskRow({
   paneId,
   isSearchFocus = false,
   isKeyboardFocus = false,
+  focusMuted = false,
   isNestDropTarget = false,
   fieldVisibility,
   isTitleEditing = false,
@@ -475,7 +478,11 @@ export function TaskRow({
           ? "bg-[var(--list-drop)] ring-2 ring-[var(--list-drop-border)]"
           : "",
         isSearchFocus ? "ring-2 ring-amber-300/90" : "",
-        isKeyboardFocus && !isSearchFocus ? "ring-2 ring-[var(--list-focus)]" : "",
+        isKeyboardFocus && !isSearchFocus
+          ? focusMuted
+            ? "ring-1 ring-dashed ring-[var(--list-muted)]"
+            : "ring-2 ring-[var(--list-focus)]"
+          : "",
         isDueOverdue(rollupOverdue ?? null, done) ? "ring-1 ring-red-400/70" : "",
       ].join(" ")}
     >

@@ -29,6 +29,7 @@ describe("appearanceToCssVars", () => {
     expect(vars["--list-card"]).toMatch(/^#[0-9a-f]{6}$/i);
     expect(vars["--list-border"]).toContain("rgba");
     expect(vars["--list-focus"]).toMatch(/^#/);
+    expect(vars["--list-target"]).toMatch(/^#/);
   });
 
   it("uses light text on dark list backgrounds", () => {
