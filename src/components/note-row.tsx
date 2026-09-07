@@ -32,6 +32,7 @@ import { useTaskTreeStore } from "@/store/task-tree-store";
 import type { TaskNode } from "@/types/task-node";
 
 import { NoteMarkdownContent } from "./note-markdown-content";
+import { CardModifierHintOverlay } from "./card-modifier-hint-overlay";
 
 const rowMenuItemClass =
   "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-[var(--list-text)] hover:bg-[var(--list-hover)]";
@@ -247,6 +248,11 @@ export function NoteRow({
       {...attributes}
       {...listeners}
       tabIndex={isKeyboardFocus ? -1 : undefined}
+      aria-current={isKeyboardFocus ? "true" : undefined}
+      onPointerDownCapture={(e) => {
+        if (e.button !== 0) return;
+        onSelect();
+      }}
       onClick={(e) => {
         if (isInteractiveTarget(e.target)) return;
         onSelect();
@@ -266,8 +272,8 @@ export function NoteRow({
         isSearchFocus ? "ring-2 ring-amber-300/90" : "",
         isKeyboardFocus && !isSearchFocus
           ? focusMuted
-            ? "ring-1 ring-dashed ring-[var(--list-muted)]"
-            : accent.keyboardRing
+            ? "list-card-cursor-muted"
+            : "list-card-cursor"
           : "",
       ].join(" ")}
     >
@@ -375,6 +381,13 @@ export function NoteRow({
           {menu ? createPortal(menu, document.body) : null}
         </div>
       </div>
+      {!isDragging ? (
+        <CardModifierHintOverlay
+          node={node}
+          hasChildren={hasChildren}
+          isCollapsed={isCollapsed}
+        />
+      ) : null}
     </article>
   );
 }

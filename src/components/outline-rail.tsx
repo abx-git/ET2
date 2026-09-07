@@ -19,6 +19,7 @@ import { useTaskTreeStore } from "@/store/task-tree-store";
 import type { TaskNode } from "@/types/task-node";
 
 import type { TaskTitleSaveMeta } from "./task-row";
+import { CardModifierHintOverlay } from "./card-modifier-hint-overlay";
 
 export type OutlineRailVariant = "rail" | "light";
 
@@ -148,13 +149,12 @@ function OutlineRow({
       data-outline-drop-id={outlineNestId(node.id)}
       data-outline-node-id={node.id}
       className={[
-        "group flex touch-none cursor-grab items-center gap-0.5 rounded-md text-left text-[var(--text)] active:cursor-grabbing",
+        "group relative flex touch-none cursor-grab items-center gap-0.5 rounded-md text-left text-[var(--text)] active:cursor-grabbing",
         light ? "px-1 py-1 text-sm" : "px-0.5 py-0.5 text-[13px] leading-snug",
         selected
-          ? "bg-[var(--control-hover)] font-medium ring-1 ring-[var(--border)]"
+          ? "bg-[var(--control-hover)] font-medium"
           : "hover:bg-[var(--control)]",
-        keyboardFocus && !selected ? "ring-2 ring-[var(--list-focus)]" : "",
-        keyboardFocus && selected ? "ring-2 ring-[var(--list-focus)]" : "",
+        keyboardFocus ? "list-card-cursor" : "",
         isDragging ? "opacity-40" : "",
         isNestTarget || isOver
           ? isNoteNode(node)
@@ -165,6 +165,11 @@ function OutlineRow({
       style={{ paddingLeft: `${(light ? 8 : 4) + depth * (light ? 16 : 12)}px` }}
       {...(isTitleEditing ? {} : attributes)}
       {...(isTitleEditing ? {} : listeners)}
+      aria-current={keyboardFocus ? "true" : undefined}
+      onPointerDownCapture={(e) => {
+        if (e.button !== 0 || isTitleEditing) return;
+        onSelect();
+      }}
     >
       <span
         className={[
@@ -259,6 +264,14 @@ function OutlineRow({
           {nodeDisplayTitle(node)}
         </button>
       )}
+      {!isTitleEditing && !isDragging ? (
+        <CardModifierHintOverlay
+          node={node}
+          hasChildren={hasChildren}
+          isCollapsed={collapsed}
+          compact
+        />
+      ) : null}
     </div>
   );
 }

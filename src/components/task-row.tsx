@@ -43,6 +43,7 @@ import {
   type CardColorId,
 } from "@/lib/card-color";
 import { CardIconBadge } from "@/components/card-icon-badge";
+import { CardModifierHintOverlay } from "@/components/card-modifier-hint-overlay";
 import type { BoardPaneId } from "@/lib/board-pane";
 import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
 import { writeClipboardText } from "@/lib/clipboard";
@@ -460,6 +461,11 @@ export function TaskRow({
       {...attributes}
       {...listeners}
       tabIndex={isKeyboardFocus ? -1 : undefined}
+      aria-current={isKeyboardFocus ? "true" : undefined}
+      onPointerDownCapture={(e) => {
+        if (e.button !== 0 || isTitleEditing) return;
+        onSelect();
+      }}
       onClick={(e) => {
         if (isInteractiveTarget(e.target) || isTitleEditing) return;
         onSelect();
@@ -480,8 +486,8 @@ export function TaskRow({
         isSearchFocus ? "ring-2 ring-amber-300/90" : "",
         isKeyboardFocus && !isSearchFocus
           ? focusMuted
-            ? "ring-1 ring-dashed ring-[var(--list-muted)]"
-            : "ring-2 ring-[var(--list-focus)]"
+            ? "list-card-cursor-muted"
+            : "list-card-cursor"
           : "",
         isDueOverdue(rollupOverdue ?? null, done) ? "ring-1 ring-red-400/70" : "",
       ].join(" ")}
@@ -685,6 +691,13 @@ export function TaskRow({
       </div>
 
       {typeof document !== "undefined" && menu ? createPortal(menu, document.body) : menu}
+      {!isTitleEditing && !isDragging ? (
+        <CardModifierHintOverlay
+          node={node}
+          hasChildren={hasChildren}
+          isCollapsed={isCollapsed}
+        />
+      ) : null}
     </article>
   );
 }

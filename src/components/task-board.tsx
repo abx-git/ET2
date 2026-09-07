@@ -190,6 +190,7 @@ import { PostImportSaveDialog } from "./post-import-save-dialog";
 import { TaskEditorDialog } from "./task-editor-dialog";
 import { NoteEditorDialog } from "./note-editor-dialog";
 import { KeyboardShortcutsHelpDialog } from "./keyboard-shortcuts-help-dialog";
+import { HeldCardModifiersProvider } from "./card-modifier-hint-overlay";
 
 
 function DragPreviewCard({ id }: { id: string }) {
@@ -1480,7 +1481,7 @@ export function TaskBoard() {
         return;
       }
 
-      if (e.key === " " || e.key === "Spacebar") {
+      if ((e.key === " " || e.key === "Spacebar") && !e.repeat) {
         e.preventDefault();
         if (lightModeEnabled) toggleNodeCollapsed(currentId);
         else toggleCardCollapsed(currentId);
@@ -2116,6 +2117,7 @@ export function TaskBoard() {
   );
 
   return (
+    <HeldCardModifiersProvider enabled={!cardKeyboardBlocked}>
     <div className="relative flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)]">
       <WorkingFileSync
         onWorkingFileNameChange={setWorkingFileName}
@@ -2651,5 +2653,6 @@ export function TaskBoard() {
         }}
       />
     </div>
+    </HeldCardModifiersProvider>
   );
 }

@@ -286,6 +286,28 @@ export function moveCardWithKeyboard(
   return relocateNode(roots, nodeId, prev.id, prev.children.length, prev.id);
 }
 
+/** Welche Shift+Pfeil-Verschiebungen für diese Karte möglich sind. */
+export function availableKeyboardMoves(
+  roots: TaskNode[],
+  nodeId: string,
+): Record<CardNavDirection, boolean> {
+  const parentId = findDirectParentId(roots, nodeId);
+  if (parentId === undefined) {
+    return { up: false, down: false, left: false, right: false };
+  }
+  const siblings = getSiblingsList(roots, parentId);
+  const idx = siblings.findIndex((n) => n.id === nodeId);
+  if (idx < 0) {
+    return { up: false, down: false, left: false, right: false };
+  }
+  return {
+    up: idx > 0,
+    down: idx < siblings.length - 1,
+    left: parentId !== null,
+    right: idx > 0,
+  };
+}
+
 function relocateNode(
   roots: TaskNode[],
   nodeId: string,

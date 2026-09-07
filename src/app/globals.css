@@ -110,7 +110,22 @@ body {
   }
 
   .list-card-surface {
-    box-shadow: var(--list-shadow);
+    /* Mit Tailwind-Ringen kombinieren (die ebenfalls box-shadow nutzen). */
+    --tw-shadow: var(--list-shadow);
+    --tw-shadow-colored: var(--list-shadow);
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
+      var(--list-shadow);
+  }
+
+  /* Aktiver Listen-Cursor: Outline, damit der Rand nicht vom Kartenschatten überdeckt wird. */
+  .list-card-cursor {
+    outline: 2px solid var(--list-focus);
+    outline-offset: 1px;
+  }
+
+  .list-card-cursor-muted {
+    outline: 1px dashed var(--list-muted);
+    outline-offset: 1px;
   }
 }
 
