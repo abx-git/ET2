@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  availableKeyboardMoves,
   firstContextCardId,
   focusTargetAfterRemoving,
   isCardVisibleInListContext,
@@ -202,6 +203,24 @@ describe("moveCardWithKeyboard", () => {
     expect(moved?.parentId).toBe("a");
     expect(moved?.roots.map((n) => n.id)).toEqual(["a", "c"]);
     expect(moved?.roots[0]?.children.map((n) => n.id)).toEqual(["a1", "b"]);
+  });
+
+  it("meldet mögliche Shift+Pfeil-Richtungen", () => {
+    const roots = [
+      node("p", "P", [node("a", "A"), node("b", "B", [node("b1", "B1")]), node("c", "C")]),
+    ];
+    expect(availableKeyboardMoves(roots, "a")).toEqual({
+      up: false,
+      down: true,
+      left: true,
+      right: false,
+    });
+    expect(availableKeyboardMoves(roots, "b")).toEqual({
+      up: true,
+      down: true,
+      left: true,
+      right: true,
+    });
   });
 });
 

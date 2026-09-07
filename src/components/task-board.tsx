@@ -190,7 +190,7 @@ import { PostImportSaveDialog } from "./post-import-save-dialog";
 import { TaskEditorDialog } from "./task-editor-dialog";
 import { NoteEditorDialog } from "./note-editor-dialog";
 import { KeyboardShortcutsHelpDialog } from "./keyboard-shortcuts-help-dialog";
-import { HeldCardModifiersProvider } from "./card-modifier-hint-overlay";
+import { CardActionHelpControl } from "./card-action-help-popup";
 
 
 function DragPreviewCard({ id }: { id: string }) {
@@ -2075,6 +2075,8 @@ export function TaskBoard() {
             </span>
           </button>
 
+          <CardActionHelpControl split={commanderSplit} />
+
           <BoardHeaderMoreMenu
             boardMaxVisibleLevels={boardMaxVisibleLevels}
             splitAvailable={!isMobileLayout}
@@ -2117,7 +2119,6 @@ export function TaskBoard() {
   );
 
   return (
-    <HeldCardModifiersProvider enabled={!cardKeyboardBlocked}>
     <div className="relative flex h-screen min-h-0 flex-col overflow-hidden bg-[var(--bg)] text-[var(--text)]">
       <WorkingFileSync
         onWorkingFileNameChange={setWorkingFileName}
@@ -2653,6 +2654,5 @@ export function TaskBoard() {
         }}
       />
     </div>
-    </HeldCardModifiersProvider>
   );
 }

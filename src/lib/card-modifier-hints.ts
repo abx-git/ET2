@@ -1,6 +1,3 @@
-import { availableKeyboardMoves, type CardNavDirection } from "@/lib/card-keyboard-nav";
-import type { TaskNode } from "@/types/task-node";
-
 export type HeldCardModifiers = {
   shift: boolean;
   alt: boolean;
@@ -19,7 +16,7 @@ export const EMPTY_HELD_CARD_MODIFIERS: HeldCardModifiers = {
   fn: false,
 };
 
-export type CardHintIcon =
+export type CardHelpIcon =
   | "arrow-up"
   | "arrow-down"
   | "arrow-left"
@@ -32,29 +29,21 @@ export type CardHintIcon =
   | "folder-input"
   | "trash"
   | "fold"
-  | "unfold"
   | "panels";
 
-export type CardHintGroup = "move" | "create" | "edit" | "fold" | "transfer";
+export type CardHelpSectionId = "shift" | "command" | "alt" | "fn" | "space";
 
-export type CardHint = {
+export type CardHelpRow = {
   id: string;
-  label: string;
   keys: string;
-  icon: CardHintIcon;
-  enabled: boolean;
-  group: CardHintGroup;
+  label: string;
+  icon: CardHelpIcon;
 };
 
-export type CardModifierHintArgs = {
-  held: HeldCardModifiers;
-  isMac: boolean;
-  isNote: boolean;
-  hasChildren: boolean;
-  isCollapsed: boolean;
-  split: boolean;
-  moves: Record<CardNavDirection, boolean>;
-  commandLabel: "⌘" | "Strg";
+export type CardHelpSection = {
+  id: CardHelpSectionId;
+  title: string;
+  rows: CardHelpRow[];
 };
 
 export function isApplePlatform(platform: string, userAgent = ""): boolean {
@@ -63,12 +52,6 @@ export function isApplePlatform(platform: string, userAgent = ""): boolean {
 
 export function commandModifierHeld(held: HeldCardModifiers, isMac: boolean): boolean {
   return isMac ? held.meta || held.ctrl : held.ctrl;
-}
-
-export function shouldShowCardHints(held: HeldCardModifiers, isMac: boolean): boolean {
-  return (
-    held.shift || held.alt || held.space || held.fn || commandModifierHeld(held, isMac)
-  );
 }
 
 type KeyLike = {
@@ -108,197 +91,87 @@ export function applyHeldModifierKey(
   return next;
 }
 
-export function movesForCard(roots: TaskNode[], nodeId: string): Record<CardNavDirection, boolean> {
-  return availableKeyboardMoves(roots, nodeId);
+export function activeHelpSectionIds(
+  held: HeldCardModifiers,
+  isMac: boolean,
+): CardHelpSectionId[] {
+  const ids: CardHelpSectionId[] = [];
+  if (held.shift) ids.push("shift");
+  if (commandModifierHeld(held, isMac)) ids.push("command");
+  if (held.alt) ids.push("alt");
+  if (held.fn) ids.push("fn");
+  if (held.space) ids.push("space");
+  return ids;
 }
 
-export function cardModifierHints(args: CardModifierHintArgs): CardHint[] {
-  if (!shouldShowCardHints(args.held, args.isMac)) return [];
-
-  const hints: CardHint[] = [];
+export function cardActionHelpSections(args: {
+  commandLabel: "⌘" | "Strg";
+  split: boolean;
+}): CardHelpSection[] {
   const cmd = args.commandLabel;
-  const command = commandModifierHeld(args.held, args.isMac);
-  const { held } = args;
+  const sections: CardHelpSection[] = [
+    {
+      id: "shift",
+      title: "Shift",
+      rows: [
+        { id: "move-up", keys: "⇧↑", label: "Karte nach oben", icon: "arrow-up" },
+        { id: "move-down", keys: "⇧↓", label: "Karte nach unten", icon: "arrow-down" },
+        { id: "move-left", keys: "⇧←", label: "Eine Ebene höher", icon: "arrow-left" },
+        { id: "move-right", keys: "⇧→", label: "Eine Ebene tiefer", icon: "arrow-right" },
+        { id: "add-sibling-note", keys: "⇧↵", label: "Notiz daneben", icon: "sticky-note" },
+      ],
+    },
+    {
+      id: "command",
+      title: cmd,
+      rows: [
+        { id: "paste-link", keys: `${cmd}+K`, label: "Link aus der Zwischenablage", icon: "link" },
+      ],
+    },
+    {
+      id: "alt",
+      title: "Alt / Option",
+      rows: [
+        { id: "add-sibling-card", keys: "↵", label: "Neue Karte daneben", icon: "list-plus" },
+        {
+          id: args.split ? "switch-pane" : "add-child-card",
+          keys: "⇥",
+          label: args.split ? "Anderes Panel" : "Unterkarte anlegen",
+          icon: args.split ? "panels" : "list-plus",
+        },
+        { id: "edit-details-alt", keys: "F2", label: "Details öffnen", icon: "pencil" },
+        { id: "delete-card", keys: "⌫", label: "Eintrag löschen", icon: "trash" },
+      ],
+    },
+    {
+      id: "fn",
+      title: "Fn / F-Tasten",
+      rows: [{ id: "edit-details", keys: "F2", label: "Details öffnen", icon: "pencil" }],
+    },
+    {
+      id: "space",
+      title: "Leertaste",
+      rows: [{ id: "toggle-expand", keys: "␣", label: "Ast auf- oder zuklappen", icon: "fold" }],
+    },
+  ];
 
-  if (held.shift) {
-    hints.push(
-      {
-        id: "move-up",
-        label: "Unter Geschwistern nach oben",
-        keys: "⇧↑",
-        icon: "arrow-up",
-        enabled: args.moves.up,
-        group: "move",
-      },
-      {
-        id: "move-down",
-        label: "Unter Geschwistern nach unten",
-        keys: "⇧↓",
-        icon: "arrow-down",
-        enabled: args.moves.down,
-        group: "move",
-      },
-      {
-        id: "move-left",
-        label: "Eine Ebene höher",
-        keys: "⇧←",
-        icon: "arrow-left",
-        enabled: args.moves.left,
-        group: "move",
-      },
-      {
-        id: "move-right",
-        label: "Eine Ebene tiefer (unter die Karte darüber)",
-        keys: "⇧→",
-        icon: "arrow-right",
-        enabled: args.moves.right,
-        group: "move",
-      },
+  if (!args.split) {
+    sections[0]!.rows.push({
+      id: "add-child-note",
+      keys: "⇧⇥",
+      label: "Notiz darunter",
+      icon: "sticky-note",
+    });
+  } else {
+    sections[1]!.rows.push(
+      { id: "add-child-card-split", keys: `${cmd}+↵`, label: "Unterkarte anlegen", icon: "list-plus" },
+      { id: "add-child-note-split", keys: `${cmd}+⇧↵`, label: "Notiz darunter", icon: "sticky-note" },
     );
-    if (!command) {
-      hints.push({
-        id: "add-sibling-note",
-        label: "Geschwisternotiz anlegen",
-        keys: "⇧↵",
-        icon: "sticky-note",
-        enabled: true,
-        group: "create",
-      });
-      if (!args.split) {
-        hints.push({
-          id: "add-child-note",
-          label: "Unternotiz anlegen",
-          keys: "⇧⇥",
-          icon: "sticky-note",
-          enabled: true,
-          group: "create",
-        });
-      }
-    }
-  }
-
-  if (command) {
-    if (!args.isNote) {
-      hints.push({
-        id: "paste-link",
-        label: "Link oder Befehl aus der Zwischenablage speichern",
-        keys: `${cmd}+K`,
-        icon: "link",
-        enabled: true,
-        group: "edit",
-      });
-    }
-    if (args.split) {
-      if (held.shift) {
-        hints.push({
-          id: "add-child-note-split",
-          label: "Unternotiz anlegen",
-          keys: `${cmd}+⇧↵`,
-          icon: "sticky-note",
-          enabled: true,
-          group: "create",
-        });
-      } else {
-        hints.push({
-          id: "add-child-card-split",
-          label: "Unterkarte anlegen",
-          keys: `${cmd}+↵`,
-          icon: "list-plus",
-          enabled: true,
-          group: "create",
-        });
-      }
-    }
-  }
-
-  if (held.fn) {
-    hints.push({
-      id: "edit-details",
-      label: "Details öffnen",
-      keys: "F2",
-      icon: "pencil",
-      enabled: true,
-      group: "edit",
-    });
-    if (args.split) {
-      hints.push(
-        {
-          id: "copy-pane",
-          label: "Ins andere Panel kopieren",
-          keys: "F5",
-          icon: "copy",
-          enabled: true,
-          group: "transfer",
-        },
-        {
-          id: "move-pane",
-          label: "Ins andere Panel verschieben",
-          keys: "F6",
-          icon: "folder-input",
-          enabled: true,
-          group: "transfer",
-        },
-      );
-    }
-  }
-
-  if (held.space) {
-    hints.push({
-      id: "toggle-expand",
-      label: args.isCollapsed ? "Ast aufklappen" : "Ast zuklappen",
-      keys: "␣",
-      icon: args.isCollapsed ? "unfold" : "fold",
-      enabled: args.hasChildren,
-      group: "fold",
-    });
-  }
-
-  const onlyAlt = held.alt && !held.shift && !command && !held.fn && !held.space;
-  if (onlyAlt) {
-    hints.push(
-      {
-        id: "add-sibling-card",
-        label: "Geschwisterkarte anlegen",
-        keys: "↵",
-        icon: "list-plus",
-        enabled: true,
-        group: "create",
-      },
-      args.split
-        ? {
-            id: "switch-pane",
-            label: "Panel wechseln",
-            keys: "⇥",
-            icon: "panels",
-            enabled: true,
-            group: "transfer",
-          }
-        : {
-            id: "add-child-card",
-            label: "Unterkarte anlegen",
-            keys: "⇥",
-            icon: "list-plus",
-            enabled: true,
-            group: "create",
-          },
-      {
-        id: "edit-details-alt",
-        label: "Details öffnen",
-        keys: "F2",
-        icon: "pencil",
-        enabled: true,
-        group: "edit",
-      },
-      {
-        id: "delete-card",
-        label: "Eintrag löschen",
-        keys: "⌫",
-        icon: "trash",
-        enabled: true,
-        group: "edit",
-      },
+    sections[3]!.rows.push(
+      { id: "copy-pane", keys: "F5", label: "Ins andere Panel kopieren", icon: "copy" },
+      { id: "move-pane", keys: "F6", label: "Ins andere Panel verschieben", icon: "folder-input" },
     );
   }
 
-  return hints;
+  return sections;
 }

@@ -133,7 +133,6 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
       items: [
         { keys: `${mod} + Shift + L`, description: "Light-Modus ein-/ausschalten" },
         { keys: "?", description: "Diese Hilfe öffnen" },
-        { keys: "Shift, Cmd/Strg, Alt, Fn, Leertaste (halten)", description: "Mögliche Aktionen auf den Einträgen anzeigen" },
         { keys: "↑ ↓", description: "Zwischen sichtbaren Einträgen wechseln" },
         { keys: "Shift + ↑", description: "Eintrag in der gleichen Ebene nach oben sortieren" },
         { keys: "Shift + ↓", description: "Eintrag in der gleichen Ebene nach unten sortieren" },
@@ -151,9 +150,8 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
     },
     {
       title: "Karten (Listenansicht)",
-      hint: "Karte zuerst per Klick oder Pfeiltasten fokussieren (blauer Rand). Modifier oder Leertaste halten: verfügbare Aktionen erscheinen auf den Karten. Nicht im Light-Modus.",
+      hint: "Karte zuerst per Klick oder Pfeiltasten fokussieren (blauer Rand). „Tasten“ oben rechts erklärt die Kürzel.",
       items: [
-        { keys: "Shift, Cmd/Strg, Alt, Fn, Leertaste (halten)", description: "Mögliche Aktionen auf den Karten anzeigen" },
         { keys: "↑ ↓", description: "Zwischen Karten in der aktuellen Ebene wechseln" },
         { keys: "Shift + ↑", description: "Karte in der gleichen Ebene nach oben sortieren" },
         { keys: "Shift + ↓", description: "Karte in der gleichen Ebene nach unten sortieren" },

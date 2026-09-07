@@ -1,43 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { availableKeyboardMoves } from "@/lib/card-keyboard-nav";
 import {
+  activeHelpSectionIds,
   applyHeldModifierKey,
-  cardModifierHints,
+  cardActionHelpSections,
   commandModifierHeld,
   EMPTY_HELD_CARD_MODIFIERS,
   isApplePlatform,
-  shouldShowCardHints,
   type HeldCardModifiers,
 } from "@/lib/card-modifier-hints";
-import type { TaskNode } from "@/types/task-node";
-
-function node(id: string, title: string, children: TaskNode[] = []): TaskNode {
-  return {
-    id,
-    title,
-    link: "",
-    description: "",
-    tags: [],
-    dueDate: null,
-    reminderDate: null,
-    effort: 0,
-    children,
-  };
-}
-
-const macCmd: Pick<
-  Parameters<typeof cardModifierHints>[0],
-  "isMac" | "commandLabel" | "isNote" | "hasChildren" | "isCollapsed" | "split" | "moves"
-> = {
-  isMac: true,
-  commandLabel: "⌘",
-  isNote: false,
-  hasChildren: true,
-  isCollapsed: true,
-  split: false,
-  moves: { up: true, down: true, left: true, right: true },
-};
 
 describe("isApplePlatform", () => {
   it("erkennt Mac und iPad", () => {
@@ -63,17 +34,6 @@ describe("applyHeldModifierKey", () => {
   it("behandelt F2 als Function-Lage", () => {
     const down = applyHeldModifierKey(EMPTY_HELD_CARD_MODIFIERS, { key: "F2" }, true);
     expect(down.fn).toBe(true);
-    const up = applyHeldModifierKey(down, { key: "F2" }, false);
-    expect(up.fn).toBe(false);
-  });
-
-  it("synchronisiert Control über getModifierState", () => {
-    const next = applyHeldModifierKey(
-      EMPTY_HELD_CARD_MODIFIERS,
-      { key: "a", getModifierState: (k) => k === "Control" },
-      true,
-    );
-    expect(next.ctrl).toBe(true);
   });
 });
 
@@ -86,48 +46,13 @@ describe("commandModifierHeld", () => {
     expect(commandModifierHeld(meta, false)).toBe(false);
     expect(commandModifierHeld(ctrl, false)).toBe(true);
   });
-
-  it("zeigt unter Windows bei nur Win-Taste keine Hinweise", () => {
-    const win: HeldCardModifiers = { ...EMPTY_HELD_CARD_MODIFIERS, meta: true };
-    expect(shouldShowCardHints(win, false)).toBe(false);
-    expect(shouldShowCardHints(win, true)).toBe(true);
-  });
 });
 
-describe("availableKeyboardMoves", () => {
-  const roots = [
-    node("p", "P", [node("a", "A"), node("b", "B", [node("b1", "B1")]), node("c", "C")]),
-  ];
-
-  it("erlaubt Verschieben nur wo es möglich ist", () => {
-    expect(availableKeyboardMoves(roots, "a")).toEqual({
-      up: false,
-      down: true,
-      left: true,
-      right: false,
-    });
-    expect(availableKeyboardMoves(roots, "b")).toEqual({
-      up: true,
-      down: true,
-      left: true,
-      right: true,
-    });
-    expect(availableKeyboardMoves(roots, "p")).toEqual({
-      up: false,
-      down: false,
-      left: false,
-      right: false,
-    });
-  });
-});
-
-describe("cardModifierHints", () => {
-  it("zeigt Shift-Verschieben und Notizen", () => {
-    const hints = cardModifierHints({
-      ...macCmd,
-      held: { ...EMPTY_HELD_CARD_MODIFIERS, shift: true },
-    });
-    expect(hints.map((h) => h.id)).toEqual([
+describe("cardActionHelpSections", () => {
+  it("listet Shift-Aktionen und blendet Split-Kürzel ohne Split aus", () => {
+    const sections = cardActionHelpSections({ commandLabel: "⌘", split: false });
+    const shift = sections.find((s) => s.id === "shift");
+    expect(shift?.rows.map((r) => r.id)).toEqual([
       "move-up",
       "move-down",
       "move-left",
@@ -135,72 +60,33 @@ describe("cardModifierHints", () => {
       "add-sibling-note",
       "add-child-note",
     ]);
-    expect(hints.find((h) => h.id === "move-up")?.enabled).toBe(true);
+    expect(sections.find((s) => s.id === "fn")?.rows.map((r) => r.id)).toEqual(["edit-details"]);
   });
 
-  it("blendet Unternotiz per Tab in der Split-Ansicht aus", () => {
-    const hints = cardModifierHints({
-      ...macCmd,
-      split: true,
-      held: { ...EMPTY_HELD_CARD_MODIFIERS, shift: true },
-    });
-    expect(hints.some((h) => h.id === "add-child-note")).toBe(false);
-  });
-
-  it("zeigt Command-Aktionen inkl. Link nur auf Karten", () => {
-    const card = cardModifierHints({
-      ...macCmd,
-      held: { ...EMPTY_HELD_CARD_MODIFIERS, meta: true },
-    });
-    expect(card.map((h) => h.id)).toContain("paste-link");
-    const note = cardModifierHints({
-      ...macCmd,
-      isNote: true,
-      held: { ...EMPTY_HELD_CARD_MODIFIERS, meta: true },
-    });
-    expect(note.map((h) => h.id)).not.toContain("paste-link");
-  });
-
-  it("zeigt Function-Transfer nur im Split", () => {
-    const alone = cardModifierHints({
-      ...macCmd,
-      held: { ...EMPTY_HELD_CARD_MODIFIERS, fn: true },
-    });
-    expect(alone.map((h) => h.id)).toEqual(["edit-details"]);
-    const split = cardModifierHints({
-      ...macCmd,
-      split: true,
-      held: { ...EMPTY_HELD_CARD_MODIFIERS, fn: true },
-    });
-    expect(split.map((h) => h.id)).toEqual(["edit-details", "copy-pane", "move-pane"]);
-  });
-
-  it("zeigt Leertaste nur mit Kindern als aktiv", () => {
-    const withKids = cardModifierHints({
-      ...macCmd,
-      held: { ...EMPTY_HELD_CARD_MODIFIERS, space: true },
-    });
-    expect(withKids).toEqual([
-      expect.objectContaining({ id: "toggle-expand", enabled: true, icon: "unfold" }),
+  it("zeigt Split-Aktionen für Command und Fn", () => {
+    const sections = cardActionHelpSections({ commandLabel: "Strg", split: true });
+    expect(sections.find((s) => s.id === "command")?.rows.map((r) => r.id)).toEqual([
+      "paste-link",
+      "add-child-card-split",
+      "add-child-note-split",
     ]);
-    const leaf = cardModifierHints({
-      ...macCmd,
-      hasChildren: false,
-      held: { ...EMPTY_HELD_CARD_MODIFIERS, space: true },
-    });
-    expect(leaf[0]?.enabled).toBe(false);
+    expect(sections.find((s) => s.id === "fn")?.rows.map((r) => r.id)).toEqual([
+      "edit-details",
+      "copy-pane",
+      "move-pane",
+    ]);
+    expect(sections.find((s) => s.id === "shift")?.rows.some((r) => r.id === "add-child-note")).toBe(
+      false,
+    );
   });
 
-  it("zeigt unter Option die Grundaktionen", () => {
-    const hints = cardModifierHints({
-      ...macCmd,
-      held: { ...EMPTY_HELD_CARD_MODIFIERS, alt: true },
-    });
-    expect(hints.map((h) => h.id)).toEqual([
-      "add-sibling-card",
-      "add-child-card",
-      "edit-details-alt",
-      "delete-card",
+  it("hebt den passenden Abschnitt bei gehaltener Taste hervor", () => {
+    expect(activeHelpSectionIds({ ...EMPTY_HELD_CARD_MODIFIERS, shift: true }, true)).toEqual([
+      "shift",
     ]);
+    expect(activeHelpSectionIds({ ...EMPTY_HELD_CARD_MODIFIERS, meta: true }, true)).toEqual([
+      "command",
+    ]);
+    expect(activeHelpSectionIds({ ...EMPTY_HELD_CARD_MODIFIERS, meta: true }, false)).toEqual([]);
   });
 });

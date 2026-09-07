@@ -32,7 +32,6 @@ import { useTaskTreeStore } from "@/store/task-tree-store";
 import type { TaskNode } from "@/types/task-node";
 
 import { NoteMarkdownContent } from "./note-markdown-content";
-import { CardModifierHintOverlay } from "./card-modifier-hint-overlay";
 
 const rowMenuItemClass =
   "flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-[var(--list-text)] hover:bg-[var(--list-hover)]";
@@ -381,13 +380,6 @@ export function NoteRow({
           {menu ? createPortal(menu, document.body) : null}
         </div>
       </div>
-      {!isDragging ? (
-        <CardModifierHintOverlay
-          node={node}
-          hasChildren={hasChildren}
-          isCollapsed={isCollapsed}
-        />
-      ) : null}
     </article>
   );
 }
