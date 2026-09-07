@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   availableKeyboardMoves,
+  collapsedIdsHidingKeyboardNest,
   firstContextCardId,
   focusTargetAfterRemoving,
   isCardVisibleInListContext,
@@ -222,6 +223,14 @@ describe("moveCardWithKeyboard", () => {
       right: true,
     });
   });
+
+  it("rückt nicht unter eine zugeklappte Karte ein", () => {
+    const roots = [node("a", "A", [node("a1", "A1")]), node("b", "B")];
+    const collapsed = new Set(["a"]);
+    expect(moveCardWithKeyboard(roots, "b", "right", collapsed)).toBeNull();
+    expect(availableKeyboardMoves(roots, "b", collapsed).right).toBe(false);
+    expect(moveCardWithKeyboard(roots, "b", "right")?.parentId).toBe("a");
+  });
 });
 
 describe("isCardVisibleInListContext", () => {
@@ -236,5 +245,19 @@ describe("isCardVisibleInListContext", () => {
     expect(isCardVisibleInListContext(roots, "a1", "a", false)).toBe(true);
     expect(isCardVisibleInListContext(roots, "a1", null, false)).toBe(true);
     expect(isCardVisibleInListContext(roots, "a2", "a1", false)).toBe(false);
+  });
+});
+
+describe("collapsedIdsHidingKeyboardNest", () => {
+  it("nutzt Light- bzw. Expand-Klappzustand, nicht Navigate", () => {
+    expect(
+      collapsedIdsHidingKeyboardNest(true, "expand", ["light"], ["card"]),
+    ).toEqual(new Set(["light"]));
+    expect(
+      collapsedIdsHidingKeyboardNest(false, "expand", ["light"], ["card"]),
+    ).toEqual(new Set(["card"]));
+    expect(
+      collapsedIdsHidingKeyboardNest(false, "navigate", ["light"], ["card"]),
+    ).toBeUndefined();
   });
 });

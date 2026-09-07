@@ -117,7 +117,7 @@ export function cardActionHelpSections(args: {
         { id: "move-up", keys: "⇧↑", label: "Karte nach oben", icon: "arrow-up" },
         { id: "move-down", keys: "⇧↓", label: "Karte nach unten", icon: "arrow-down" },
         { id: "move-left", keys: "⇧←", label: "Eine Ebene höher", icon: "arrow-left" },
-        { id: "move-right", keys: "⇧→", label: "Eine Ebene tiefer", icon: "arrow-right" },
+        { id: "move-right", keys: "⇧→", label: "Unter die Karte darüber (wenn aufgeklappt)", icon: "arrow-right" },
         { id: "add-sibling-note", keys: "⇧↵", label: "Notiz daneben", icon: "sticky-note" },
       ],
     },

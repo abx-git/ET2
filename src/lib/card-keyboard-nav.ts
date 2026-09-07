@@ -1,4 +1,4 @@
-import type { VisibleCardEntry } from "@/lib/card-expand";
+import type { CardInteractionMode, VisibleCardEntry } from "@/lib/card-expand";
 import {
   detachNodeById,
   findDirectParentId,
@@ -246,11 +246,15 @@ export type KeyboardCardMove = {
  * - up/down: unter denselben Geschwistern tauschen
  * - left: eine Ebene höher, direkt hinter die bisherige Elternkarte
  * - right: eine Ebene tiefer, als letztes Kind der Karte direkt darüber (vorheriges Geschwister)
+ *
+ * `collapsedIds`: in Expand/Light unsichtbare Äste. Einrücken unter eine
+ * zugeklappte Karte ist verboten — die verschobene Karte würde sofort verschwinden.
  */
 export function moveCardWithKeyboard(
   roots: TaskNode[],
   nodeId: string,
   direction: CardNavDirection,
+  collapsedIds?: ReadonlySet<string>,
 ): KeyboardCardMove | null {
   const parentId = findDirectParentId(roots, nodeId);
   if (parentId === undefined) return null;
@@ -283,6 +287,7 @@ export function moveCardWithKeyboard(
   if (idx === 0) return null;
   const prev = siblings[idx - 1];
   if (!prev) return null;
+  if (collapsedIds?.has(prev.id)) return null;
   return relocateNode(roots, nodeId, prev.id, prev.children.length, prev.id);
 }
 
@@ -290,6 +295,7 @@ export function moveCardWithKeyboard(
 export function availableKeyboardMoves(
   roots: TaskNode[],
   nodeId: string,
+  collapsedIds?: ReadonlySet<string>,
 ): Record<CardNavDirection, boolean> {
   const parentId = findDirectParentId(roots, nodeId);
   if (parentId === undefined) {
@@ -300,12 +306,28 @@ export function availableKeyboardMoves(
   if (idx < 0) {
     return { up: false, down: false, left: false, right: false };
   }
+  const prev = idx > 0 ? siblings[idx - 1] : undefined;
   return {
     up: idx > 0,
     down: idx < siblings.length - 1,
     left: parentId !== null,
-    right: idx > 0,
+    right: prev != null && !collapsedIds?.has(prev.id),
   };
+}
+
+/**
+ * Welche Klapp-IDs Shift+Rechts beachten muss: nur wo zugeklappte Äste
+ * Nachfahren wirklich ausblenden (Light-Baum bzw. Listen-Expand).
+ */
+export function collapsedIdsHidingKeyboardNest(
+  lightModeEnabled: boolean,
+  cardInteractionMode: CardInteractionMode,
+  collapsedIds: readonly string[],
+  cardCollapsedIds: readonly string[],
+): ReadonlySet<string> | undefined {
+  if (lightModeEnabled) return new Set(collapsedIds);
+  if (cardInteractionMode === "expand") return new Set(cardCollapsedIds);
+  return undefined;
 }
 
 function relocateNode(

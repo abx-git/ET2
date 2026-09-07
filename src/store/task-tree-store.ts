@@ -46,6 +46,7 @@ import {
 } from "@/lib/tree-depth-collapse";
 import type { CardInteractionMode } from "@/lib/card-expand";
 import {
+  collapsedIdsHidingKeyboardNest,
   isCardVisibleInListContext,
   moveCardWithKeyboard as applyKeyboardCardMove,
   type CardNavDirection,
@@ -1122,7 +1123,13 @@ export const useTaskTreeStore = create<TaskTreeState>()(
 
   moveCardWithKeyboard: (nodeId, direction) => {
     const current = get();
-    const moved = applyKeyboardCardMove(current.roots, nodeId, direction);
+    const collapsedIds = collapsedIdsHidingKeyboardNest(
+      current.lightModeEnabled,
+      current.cardInteractionMode,
+      current.collapsedIds,
+      current.cardCollapsedIds,
+    );
+    const moved = applyKeyboardCardMove(current.roots, nodeId, direction, collapsedIds);
     if (!moved) return false;
     const nextRoots = refreshCalculatedEffortsInTree(moved.roots, current.completedTag);
     const navigateSiblingsOnly =
