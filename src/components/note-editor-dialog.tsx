@@ -119,11 +119,12 @@ export function NoteEditorDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex h-[min(92dvh,44rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/15 sm:h-[min(88vh,44rem)] sm:rounded-2xl"
+        className="flex h-[min(92dvh,44rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white text-slate-900 shadow-2xl shadow-slate-900/15 sm:h-[min(88vh,44rem)] sm:rounded-2xl"
+        style={{ colorScheme: "light" }}
         onMouseDown={(e) => e.stopPropagation()}
         onSubmit={onSubmit}
       >
-        <div className="flex shrink-0 items-start gap-3 border-b border-slate-100 px-4 pb-3 pt-3.5">
+        <div className="flex shrink-0 items-start gap-3 border-b border-slate-100 bg-white px-4 pb-3 pt-3.5">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 id={titleId} className="text-sm font-semibold text-slate-900">
@@ -154,7 +155,7 @@ export function NoteEditorDialog({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className={[
-              "w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm text-slate-900 outline-none focus:ring-2",
+              "w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:ring-2",
               accent.editorRing,
             ].join(" ")}
             placeholder="Titel (optional)"

@@ -94,6 +94,10 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
         { keys: "Shift + Ziehen (leer)", description: "Lasso: mehrere Karten auswählen" },
         { keys: "Ziehen (Karte)", description: "Karte verschieben" },
         { keys: "Karte auf Karte legen", description: "Als Unterkarte einhängen (Nest)" },
+        {
+          keys: "Karte auf Notiz legen",
+          description: "Karte auflösen: Links, Titel und Text werden Notiz-Markdown (z. B. Link-Liste)",
+        },
         { keys: "Klick auf Titel", description: "Titel bearbeiten" },
         { keys: "Klick / Shift + Klick", description: "Karte auswählen / Mehrfachauswahl" },
         { keys: "Doppelklick (Karte)", description: "In die Karte hinein (Unterebene)" },
@@ -217,6 +221,10 @@ export function KeyboardShortcutsHelpDialog({ open, onClose }: KeyboardShortcuts
           description: "Modus Aufklappen: Ast öffnen · Modus Navigieren: hinein springen",
         },
         { keys: "Ziehen", description: "Umsortieren oder nesten (Liste oder Struktur links)" },
+        {
+          keys: "Karte auf Notiz",
+          description: "Karte auflösen: Links, Titel und Text werden Notiz-Markdown (z. B. Link-Liste)",
+        },
         { keys: "Rechtsklick", description: "Details öffnen" },
         { keys: "⋯", description: "Aktionen (Farbe, Ändern, …)" },
       ],

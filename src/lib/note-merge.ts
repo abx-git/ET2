@@ -1,7 +1,9 @@
 /**
  * Karte ↔ Notiz: Umwandeln und Markdown beim Drop auf eine Notiz zusammenführen.
+ * Drop löst die Quelle auf: Titel, Links, Text und Nachkommen werden Notiz-Markdown.
  */
 
+import { markdownLinkListItem } from "@/lib/task-link";
 import { isNoteNode, normalizeNoteMarkdown } from "@/lib/tree-node-kind";
 import {
   detachNodeById,
@@ -18,13 +20,68 @@ export function nodeBodyAsMarkdown(node: TaskNode): string {
   return (node.description ?? "").replace(/\r\n/g, "\n").trim();
 }
 
-/** Markdown-Beitrag einer Quelle inkl. Titel-Überschrift, falls sinnvoll. */
-export function sourceContributionMarkdown(source: TaskNode): string {
-  const title = source.title.trim();
-  const body = nodeBodyAsMarkdown(source);
-  if (title && body) return `## ${title}\n\n${body}`;
-  if (title) return `## ${title}`;
-  return body;
+function indentMarkdown(text: string, spaces: number): string {
+  const pad = " ".repeat(spaces);
+  return text
+    .split("\n")
+    .map((line) => (line.length === 0 ? "" : `${pad}${line}`))
+    .join("\n");
+}
+
+function joinMarkdownParts(parts: string[]): string {
+  return parts
+    .map((p) => p.replace(/\s+$/, ""))
+    .filter((p) => p.trim().length > 0)
+    .join("\n\n");
+}
+
+function joinSiblingContributions(parts: string[]): string {
+  const allList = parts.every((p) => p.trimStart().startsWith("- "));
+  return parts.join(allList ? "\n" : "\n\n");
+}
+
+type OwnBlocks = { lead: string; isList: boolean; rest: string };
+
+function nodeOwnBlocks(node: TaskNode, asList: boolean): OwnBlocks {
+  const body = nodeBodyAsMarkdown(node);
+  const title = node.title.trim();
+  const linkLine = isNoteNode(node) ? null : markdownLinkListItem(node.title, node.link);
+
+  if (linkLine) {
+    return { lead: linkLine, isList: true, rest: body };
+  }
+
+  if (asList) {
+    if (!title) return { lead: "", isList: false, rest: body };
+    return { lead: `- ${title}`, isList: true, rest: body };
+  }
+
+  if (title && body) return { lead: `## ${title}`, isList: false, rest: body };
+  if (title) return { lead: `## ${title}`, isList: false, rest: "" };
+  return { lead: "", isList: false, rest: body };
+}
+
+/**
+ * Markdown-Beitrag einer Quelle inkl. Nachkommen.
+ * Karten mit Link werden zur Link-Liste (`- [Titel](url)`), Kinder darunter eingerückt.
+ */
+export function sourceContributionMarkdown(source: TaskNode, asList = false): string {
+  const { lead, isList, rest } = nodeOwnBlocks(source, asList);
+  const childAsList = isList || asList;
+  const childParts = source.children
+    .map((child) => sourceContributionMarkdown(child, childAsList))
+    .filter((block) => block.trim().length > 0);
+
+  const ownParts: string[] = [];
+  if (lead) ownParts.push(lead);
+  if (rest) ownParts.push(isList ? indentMarkdown(rest, 2) : rest);
+  const own = joinMarkdownParts(ownParts);
+
+  if (childParts.length === 0) return own;
+  const childrenMd = joinSiblingContributions(childParts);
+  if (!own) return childrenMd;
+  if (isList) return `${own}\n${indentMarkdown(childrenMd, 2)}`;
+  return `${own}\n\n${childrenMd}`;
 }
 
 export function appendMarkdownBlocks(existing: string, incoming: string): string {
@@ -35,10 +92,12 @@ export function appendMarkdownBlocks(existing: string, incoming: string): string
   return `${a}\n\n${b}\n`;
 }
 
-/** Karte → Notiz (gleiche ID/Kinder); Beschreibung wird Markdown. */
+/** Karte → Notiz (gleiche ID/Kinder); Beschreibung und Link werden Markdown. */
 export function convertCardNodeToNote(node: TaskNode): TaskNode {
   if (isNoteNode(node)) return node;
-  const markdown = nodeBodyAsMarkdown(node);
+  const linkItem = markdownLinkListItem(node.title, node.link);
+  const body = nodeBodyAsMarkdown(node);
+  const markdown = joinMarkdownParts([linkItem ?? "", body]);
   return {
     id: node.id,
     kind: "note",
@@ -72,8 +131,29 @@ export function convertCardToNoteInForest(roots: TaskNode[], nodeId: string): Ta
   return found ? next : roots;
 }
 
+function replaceNoteMarkdown(roots: TaskNode[], targetNoteId: string, markdown: string): TaskNode[] {
+  let replaced = false;
+  function mapNodes(nodes: TaskNode[]): TaskNode[] {
+    return nodes.map((n) => {
+      if (n.id === targetNoteId) {
+        replaced = true;
+        return {
+          ...n,
+          kind: "note" as const,
+          markdown,
+          children: n.children,
+        };
+      }
+      if (n.children.length === 0) return n;
+      return { ...n, children: mapNodes(n.children) };
+    });
+  }
+  const next = mapNodes(roots);
+  return replaced ? next : roots;
+}
+
 /**
- * Quelle in Ziel-Notiz mergen: Markdown anhängen, Quell-Kinder übernehmen, Quelle entfernen.
+ * Quelle in Ziel-Notiz mergen: Inhalt als Markdown anhängen, Quelle inkl. Kinder auflösen.
  * `null` = Ziel ist keine Notiz (Caller soll nesten).
  * Unveränderte `roots` = ungültiger Drop.
  */
@@ -89,31 +169,11 @@ export function applyMergeIntoNote(
   if (!source) return roots;
   if (sourceId === targetNoteId || subtreeContainsId(source, targetNoteId)) return roots;
 
-  const contribution = sourceContributionMarkdown(source);
-  const nextMarkdown = appendMarkdownBlocks(target.markdown ?? "", contribution);
-  const absorbedChildren = source.children.map((c) => structuredClone(c) as TaskNode);
-
+  const nextMarkdown = appendMarkdownBlocks(target.markdown ?? "", sourceContributionMarkdown(source));
   const { next: withoutSource, detached } = detachNodeById(roots, sourceId);
   if (!detached) return roots;
 
-  let replaced = false;
-  function mapNodes(nodes: TaskNode[]): TaskNode[] {
-    return nodes.map((n) => {
-      if (n.id === targetNoteId) {
-        replaced = true;
-        return {
-          ...n,
-          kind: "note" as const,
-          markdown: nextMarkdown,
-          children: [...n.children, ...absorbedChildren],
-        };
-      }
-      if (n.children.length === 0) return n;
-      return { ...n, children: mapNodes(n.children) };
-    });
-  }
-  const next = mapNodes(withoutSource);
-  return replaced ? next : roots;
+  return replaceNoteMarkdown(withoutSource, targetNoteId, nextMarkdown);
 }
 
 /**
@@ -129,26 +189,6 @@ export function mergeExternalNodeIntoNote(
   if (!target || !isNoteNode(target)) return null;
   if (insert.id === targetNoteId || subtreeContainsId(insert, targetNoteId)) return roots;
 
-  const contribution = sourceContributionMarkdown(insert);
-  const nextMarkdown = appendMarkdownBlocks(target.markdown ?? "", contribution);
-  const absorbedChildren = (insert.children ?? []).map((c) => structuredClone(c) as TaskNode);
-
-  let replaced = false;
-  function mapNodes(nodes: TaskNode[]): TaskNode[] {
-    return nodes.map((n) => {
-      if (n.id === targetNoteId) {
-        replaced = true;
-        return {
-          ...n,
-          kind: "note" as const,
-          markdown: nextMarkdown,
-          children: [...n.children, ...absorbedChildren],
-        };
-      }
-      if (n.children.length === 0) return n;
-      return { ...n, children: mapNodes(n.children) };
-    });
-  }
-  const next = mapNodes(roots);
-  return replaced ? next : roots;
+  const nextMarkdown = appendMarkdownBlocks(target.markdown ?? "", sourceContributionMarkdown(insert));
+  return replaceNoteMarkdown(roots, targetNoteId, nextMarkdown);
 }

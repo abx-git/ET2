@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeTaskLink, taskLinkHref } from "./task-link";
+import { markdownLinkListItem, normalizeTaskLink, taskLinkHref } from "./task-link";
 
 describe("task-link", () => {
   it("normalisiert fehlendes Schema zu https", () => {
@@ -21,5 +21,15 @@ describe("task-link", () => {
   it("taskLinkHref liefert null bei leerem Wert", () => {
     expect(taskLinkHref("")).toBeNull();
     expect(taskLinkHref("  ")).toBeNull();
+  });
+
+  it("markdownLinkListItem formatiert Titel und URL", () => {
+    expect(markdownLinkListItem("Docs", "https://example.org/docs")).toBe(
+      "- [Docs](https://example.org/docs)",
+    );
+    expect(markdownLinkListItem("", "https://example.org")).toBe(
+      "- [https://example.org/](https://example.org/)",
+    );
+    expect(markdownLinkListItem("X", "javascript:alert(1)")).toBeNull();
   });
 });

@@ -267,11 +267,12 @@ export function TaskEditorDialog({ open, nodeId, onClose, onSave, onRequestDelet
         aria-modal="true"
         aria-labelledby="task-editor-title"
         className={[
-          "flex w-full flex-col overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white shadow-2xl shadow-slate-900/15 touch-manipulation sm:rounded-2xl",
+          "flex w-full flex-col overflow-hidden rounded-t-2xl border border-slate-200/90 bg-white text-slate-900 shadow-2xl shadow-slate-900/15 touch-manipulation sm:rounded-2xl",
           v.description
             ? "max-h-[min(92dvh,48rem)] max-w-2xl sm:max-h-[min(88vh,48rem)]"
             : "max-h-[min(92dvh,40rem)] max-w-md sm:max-h-[min(88vh,40rem)]",
         ].join(" ")}
+        style={{ colorScheme: "light" }}
         onPointerDown={(e) => e.stopPropagation()}
       >
         {/* Header */}

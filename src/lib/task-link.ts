@@ -19,3 +19,15 @@ export function taskLinkHref(raw: string | undefined | null): string | null {
   const n = normalizeTaskLink(raw ?? "");
   return n || null;
 }
+
+function escapeMarkdownLinkText(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/\[/g, "\\[").replace(/\]/g, "\\]");
+}
+
+/** Markdown-Listeneintrag `- [Titel](url)`, oder `null` ohne gültigen Link. */
+export function markdownLinkListItem(title: string, link: string | undefined | null): string | null {
+  const href = taskLinkHref(link);
+  if (!href) return null;
+  const label = title.replace(/\r?\n/g, " ").trim() || href;
+  return `- [${escapeMarkdownLinkText(label)}](${href})`;
+}
