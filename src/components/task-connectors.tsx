@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { beginConnectorEndpointDrag } from "@/lib/connector-endpoint-drag";
 import { connectorEndpointDragPreview } from "@/lib/connector-target-pick";
@@ -56,7 +56,7 @@ export function TaskConnectors({
   onSelectRelation,
   onReconnectRelation,
 }: TaskConnectorsProps) {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const draftSource = relationDraftSourceId ? byId.get(relationDraftSourceId) : undefined;
   const [reconnect, setReconnect] = useState<ReconnectDrag | null>(null);
 
