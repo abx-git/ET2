@@ -27,6 +27,16 @@ export function canvasStackCssZIndex(
   return base;
 }
 
+/** Relation SVG layer: above all cards in the current context. */
+export function canvasConnectorsCssZIndex(nodes: readonly TaskNode[]): number {
+  let max = 0;
+  for (const node of nodes) {
+    const z = canvasStackCssZIndex(node, { selected: true });
+    if (z > max) max = z;
+  }
+  return max + 2;
+}
+
 export function compareCanvasStackOrder(a: TaskNode, b: TaskNode): number {
   const dz = resolveCanvasZIndex(a) - resolveCanvasZIndex(b);
   if (dz !== 0) return dz;

@@ -13,6 +13,12 @@ import {
 import { listSchemeFromAppearance } from "@/lib/board-appearance";
 import { cardColorAccentClass, cardColorClass, cardColorCssVars } from "@/lib/card-color";
 import { canvasStackCssZIndex } from "@/lib/canvas-stack";
+import {
+  beginCanvasResizeGesture,
+  beginCanvasRotateGesture,
+  CANVAS_RESIZE_HANDLE_CLASSES,
+  type CanvasResizeHandle,
+} from "@/lib/canvas-resize-gesture";
 import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
 import { taskCardRect } from "@/lib/connector-geometry";
 import {
@@ -31,8 +37,6 @@ const MIN_WIDTH = 100;
 const MIN_HEIGHT = 60;
 const NEST_DRAG_THRESHOLD_PX = 6;
 
-type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
-
 function canvasCardIdFromPoint(clientX: number, clientY: number, excludeId: string): string | null {
   if (typeof document === "undefined") return null;
   for (const el of document.elementsFromPoint(clientX, clientY)) {
@@ -44,17 +48,6 @@ function canvasCardIdFromPoint(clientX: number, clientY: number, excludeId: stri
   }
   return null;
 }
-
-const HANDLE_POSITIONS: Record<ResizeHandle, string> = {
-  n: "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize",
-  s: "left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-ns-resize",
-  e: "right-0 top-1/2 translate-x-1/2 -translate-y-1/2 cursor-ew-resize",
-  w: "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize",
-  ne: "right-0 top-0 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize",
-  nw: "left-0 top-0 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize",
-  se: "right-0 bottom-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize",
-  sw: "left-0 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize",
-};
 
 export interface TaskCanvasCardProps {
   node: TaskNode;
@@ -237,73 +230,35 @@ export function TaskCanvasCard({
 
   const ROTATION_SNAP = 15;
 
-  /** E2-style resize: 8 handles, opposite edge/corner stays anchored. */
-  const startResize = (handle: ResizeHandle, e: React.PointerEvent) => {
+  const startResize = (handle: CanvasResizeHandle, e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const orig = { x: rect.x, y: rect.y, width: rect.w, height: rect.h };
-    const onMoveEv = (ev: PointerEvent) => {
-      const dx = (ev.clientX - startX) / zoom;
-      const dy = (ev.clientY - startY) / zoom;
-      let x = orig.x;
-      let y = orig.y;
-      let width = orig.width;
-      let height = orig.height;
-      if (handle.includes("e")) width = Math.max(MIN_WIDTH, orig.width + dx);
-      if (handle.includes("s")) height = Math.max(MIN_HEIGHT, orig.height + dy);
-      if (handle.includes("w")) {
-        const nextWidth = Math.max(MIN_WIDTH, orig.width - dx);
-        x = orig.x + (orig.width - nextWidth);
-        width = nextWidth;
-      }
-      if (handle.includes("n")) {
-        const nextHeight = Math.max(MIN_HEIGHT, orig.height - dy);
-        y = orig.y + (orig.height - nextHeight);
-        height = nextHeight;
-      }
-      onResize({ x, y, width, height });
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMoveEv);
-      window.removeEventListener("pointerup", onUp);
-      onGeometryEnd?.();
-    };
-    window.addEventListener("pointermove", onMoveEv);
-    window.addEventListener("pointerup", onUp);
+    beginCanvasResizeGesture({
+      handle,
+      zoom,
+      orig: { x: rect.x, y: rect.y, width: rect.w, height: rect.h },
+      minWidth: MIN_WIDTH,
+      minHeight: MIN_HEIGHT,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      onResize,
+      onEnd: onGeometryEnd,
+    });
   };
 
-  /** E2-style global rotation with shift-snap. */
   const startRotateGlobal = (e: React.PointerEvent) => {
-    const cardEl = e.currentTarget.parentElement as HTMLElement;
-    if (!cardEl) return;
-    const getCenter = () => {
-      const r = cardEl.getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    };
-    const angleAt = (cx: number, cy: number) => {
-      const c = getCenter();
-      return (Math.atan2(cy - c.y, cx - c.x) * 180) / Math.PI;
-    };
-    const startAngle = angleAt(e.clientX, e.clientY);
-    const startRotation = node.rotation ?? 0;
-    const onMove = (ev: PointerEvent) => {
-      const delta = angleAt(ev.clientX, ev.clientY) - startAngle;
-      let next = startRotation + delta;
-      if (ev.shiftKey) {
-        next = Math.round(next / ROTATION_SNAP) * ROTATION_SNAP;
-      }
-      onRotate(next);
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      onGeometryEnd?.();
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    const host = e.currentTarget.parentElement as HTMLElement | null;
+    if (!host) return;
+    beginCanvasRotateGesture({
+      getHostElement: () => host,
+      startRotation: node.rotation ?? 0,
+      snapDegrees: ROTATION_SNAP,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      onRotate,
+      onEnd: onGeometryEnd,
+    });
   };
 
   return (
@@ -644,7 +599,7 @@ export function TaskCanvasCard({
 
       {/* Resize handles — E2-style 8 handles (only single-select) */}
       {selected && !multiSelected && !editing &&
-        (Object.keys(HANDLE_POSITIONS) as ResizeHandle[]).map((handle) => (
+        (Object.keys(CANVAS_RESIZE_HANDLE_CLASSES) as CanvasResizeHandle[]).map((handle) => (
           <button
             key={handle}
             type="button"
@@ -652,7 +607,7 @@ export function TaskCanvasCard({
             className={[
               "absolute z-20 rounded-sm border border-sky-600 bg-white shadow-sm",
               coarsePointer ? "h-4 w-4" : "h-2.5 w-2.5",
-              HANDLE_POSITIONS[handle],
+              CANVAS_RESIZE_HANDLE_CLASSES[handle],
             ].join(" ")}
             onPointerDown={(e) => startResize(handle, e)}
           />

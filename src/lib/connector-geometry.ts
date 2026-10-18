@@ -30,6 +30,26 @@ export function taskCardCenter(node: TaskNode): Point {
   return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
 }
 
+export function rectCenter(rect: ElementRect): Point {
+  return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+}
+
+/** Closest point on the rectangle border in the direction of `toward` from the center. */
+export function rectAnchorToward(rect: ElementRect, toward: Point): Point {
+  const center = rectCenter(rect);
+  const dx = toward.x - center.x;
+  const dy = toward.y - center.y;
+  if (Math.abs(dx) < 1e-9 && Math.abs(dy) < 1e-9) {
+    return { x: center.x, y: rect.y + rect.h };
+  }
+  const hw = rect.w / 2;
+  const hh = rect.h / 2;
+  const scaleX = Math.abs(dx) > 1e-9 ? hw / Math.abs(dx) : Number.POSITIVE_INFINITY;
+  const scaleY = Math.abs(dy) > 1e-9 ? hh / Math.abs(dy) : Number.POSITIVE_INFINITY;
+  const t = Math.min(scaleX, scaleY);
+  return { x: center.x + dx * t, y: center.y + dy * t };
+}
+
 /** Intersection of the ray from `from` toward `toward` with the rectangle edge. */
 export function rectEdgePoint(rect: ElementRect, from: Point, toward: Point): Point {
   const dx = toward.x - from.x;
@@ -80,14 +100,14 @@ export function diamondEdgePoint(rect: ElementRect, toward: Point): Point {
   return { x: cx + dx * t, y: cy + dy * t };
 }
 
-function nodeEdgePoint(node: TaskNode, toward: Point): Point {
+/** World point where a connector meets this node (shape-aware). */
+export function taskCardAnchorToward(node: TaskNode, toward: Point): Point {
   const rect = taskCardRect(node);
-  const center = taskCardCenter(node);
   if (isSymbolNode(node)) {
     if (node.symbolType === "useCase") return ellipseEdgePoint(rect, toward);
     if (node.symbolType === "decision") return diamondEdgePoint(rect, toward);
   }
-  return rectEdgePoint(rect, center, toward);
+  return rectAnchorToward(rect, toward);
 }
 
 export function relationAnchors(
@@ -97,8 +117,8 @@ export function relationAnchors(
   const sc = taskCardCenter(source);
   const tc = taskCardCenter(target);
   return {
-    start: nodeEdgePoint(source, tc),
-    end: nodeEdgePoint(target, sc),
+    start: taskCardAnchorToward(source, tc),
+    end: taskCardAnchorToward(target, sc),
   };
 }
 
