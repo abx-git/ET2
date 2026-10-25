@@ -1,14 +1,20 @@
 "use client";
 
-import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
 
+import { beginConnectorEndpointDrag } from "@/lib/connector-endpoint-drag";
+import { connectorEndpointDragPreview } from "@/lib/connector-target-pick";
 import {
-  findCardAtWorldPoint,
+  connectorEndpointHandleRadius,
+  connectorHitStrokeWidth,
+} from "@/lib/connector-style";
+import {
   relationAnchors,
   taskCardCenter,
   taskCardRect,
   type Point,
 } from "@/lib/connector-geometry";
+import { canvasConnectorsCssZIndex } from "@/lib/canvas-stack";
 import { canConnectSiblings, relationStroke } from "@/lib/task-relations";
 import { relationArrowLabel, type TaskRelation } from "@/types/task-relation";
 import type { TaskNode } from "@/types/task-node";
@@ -34,12 +40,9 @@ export interface TaskConnectorsProps {
 interface ReconnectDrag {
   relationId: string;
   end: RelationEndpoint;
-  cursor: Point;
+  lineEnd: Point;
   hoverNodeId: string | null;
-}
-
-function handleScreenRadius(zoom: number): number {
-  return Math.max(6, 8 / Math.max(zoom, 0.25));
+  valid: boolean;
 }
 
 export function TaskConnectors({
@@ -53,40 +56,53 @@ export function TaskConnectors({
   onSelectRelation,
   onReconnectRelation,
 }: TaskConnectorsProps) {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const draftSource = relationDraftSourceId ? byId.get(relationDraftSourceId) : undefined;
-  const [hoveredRelationId, setHoveredRelationId] = useState<string | null>(null);
   const [reconnect, setReconnect] = useState<ReconnectDrag | null>(null);
-  const reconnectRef = useRef<ReconnectDrag | null>(null);
 
-  const resolveHoverTarget = useCallback(
-    (
-      relationId: string,
-      end: RelationEndpoint,
-      world: Point,
-    ): string | null => {
+  const canAttachTo = useCallback(
+    (relationId: string, end: RelationEndpoint, targetId: string): boolean => {
       const rel = relations.find((r) => r.id === relationId);
-      if (!rel) return null;
-      const fixedNodeId = end === "source" ? rel.targetId : rel.sourceId;
-      const hit = findCardAtWorldPoint(nodes, world.x, world.y, [fixedNodeId]);
-      if (!hit) return null;
-      const nextSource = end === "source" ? hit.id : rel.sourceId;
-      const nextTarget = end === "target" ? hit.id : rel.targetId;
-      if (nextSource === nextTarget) return null;
-      if (!canConnectSiblings(roots, nextSource, nextTarget)) return null;
-      if (
-        relations.some(
-          (r) =>
-            r.id !== relationId &&
-            r.sourceId === nextSource &&
-            r.targetId === nextTarget,
-        )
-      ) {
-        return null;
-      }
-      return hit.id;
+      if (!rel) return false;
+      const nextSource = end === "source" ? targetId : rel.sourceId;
+      const nextTarget = end === "target" ? targetId : rel.targetId;
+      if (nextSource === nextTarget) return false;
+      if (!canConnectSiblings(roots, nextSource, nextTarget)) return false;
+      return !relations.some(
+        (r) =>
+          r.id !== relationId &&
+          r.sourceId === nextSource &&
+          r.targetId === nextTarget,
+      );
     },
-    [nodes, relations, roots],
+    [relations, roots],
+  );
+
+  const previewAt = useCallback(
+    (relationId: string, end: RelationEndpoint, world: Point): ReconnectDrag => {
+      const rel = relations.find((r) => r.id === relationId);
+      if (!rel) {
+        return { relationId, end, lineEnd: world, hoverNodeId: null, valid: false };
+      }
+      const fixedNodeId = end === "source" ? rel.targetId : rel.sourceId;
+      const fixedNode = byId.get(fixedNodeId);
+      const toward = fixedNode ? taskCardCenter(fixedNode) : world;
+      const preview = connectorEndpointDragPreview(
+        world,
+        toward,
+        nodes,
+        [fixedNodeId],
+        (target) => canAttachTo(relationId, end, target.id),
+      );
+      return {
+        relationId,
+        end,
+        lineEnd: preview.lineEnd,
+        hoverNodeId: preview.target?.id ?? null,
+        valid: preview.valid,
+      };
+    },
+    [byId, canAttachTo, nodes, relations],
   );
 
   const startEndpointDrag = (
@@ -100,55 +116,29 @@ export function TaskConnectors({
     onSelectRelation(relationId);
 
     const world = clientToWorld(e.clientX, e.clientY);
-    const initial: ReconnectDrag = {
-      relationId,
-      end,
-      cursor: world,
-      hoverNodeId: resolveHoverTarget(relationId, end, world),
-    };
-    reconnectRef.current = initial;
-    setReconnect(initial);
+    setReconnect(previewAt(relationId, end, world));
 
-    const onMove = (ev: PointerEvent) => {
-      const nextWorld = clientToWorld(ev.clientX, ev.clientY);
-      const prev = reconnectRef.current;
-      if (!prev) return;
-      const next: ReconnectDrag = {
-        ...prev,
-        cursor: nextWorld,
-        hoverNodeId: resolveHoverTarget(prev.relationId, prev.end, nextWorld),
-      };
-      reconnectRef.current = next;
-      setReconnect(next);
-    };
-
-    const onUp = (ev: PointerEvent) => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      const prev = reconnectRef.current;
-      reconnectRef.current = null;
-      setReconnect(null);
-      if (!prev) return;
-      const dropWorld = clientToWorld(ev.clientX, ev.clientY);
-      const targetId = resolveHoverTarget(prev.relationId, prev.end, dropWorld);
-      if (targetId) {
-        onReconnectRelation(prev.relationId, prev.end, targetId);
-      }
-    };
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    beginConnectorEndpointDrag({
+      clientToWorld,
+      onMove: (nextWorld) => setReconnect(previewAt(relationId, end, nextWorld)),
+      onCommit: (dropWorld) => {
+        const preview = previewAt(relationId, end, dropWorld);
+        setReconnect(null);
+        if (preview.valid && preview.hoverNodeId) {
+          onReconnectRelation(relationId, end, preview.hoverNodeId);
+        }
+      },
+    });
   };
 
-  const handleR = handleScreenRadius(zoom);
-  const activeHandlesRelationId = reconnect?.relationId ?? selectedRelationId ?? hoveredRelationId;
+  const hitWidth = connectorHitStrokeWidth(zoom);
+  const connectorZ = canvasConnectorsCssZIndex(nodes);
 
-  // Über den Karten (z≈40+), damit Linien nicht unter Notiz/Karten verschwinden.
-  // Root bleibt pointer-events-none — Klicks gehen durch, außer auf die Linien selbst.
   return (
     <svg
       className="pointer-events-none absolute inset-0 overflow-visible"
-      style={{ zIndex: 100000 }}
+      style={{ zIndex: connectorZ }}
+      data-et2-connectors=""
       data-relations={relations.map((r) => r.id).join(" ")}
     >
       <defs>
@@ -158,12 +148,9 @@ export function TaskConnectors({
         <marker id="et2-arrowhead-selected" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
           <path d="M0,0 L8,3 L0,6 Z" fill="#0f766e" />
         </marker>
-        <marker id="et2-arrowhead-draft" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
-          <path d="M0,0 L8,3 L0,6 Z" fill="#ca8a04" />
-        </marker>
       </defs>
 
-      {reconnect?.hoverNodeId
+      {reconnect?.valid && reconnect.hoverNodeId
         ? (() => {
             const node = byId.get(reconnect.hoverNodeId);
             if (!node) return null;
@@ -193,29 +180,26 @@ export function TaskConnectors({
         const midX = (start.x + end.x) / 2;
         const midY = (start.y + end.y) / 2;
         const selected = rel.id === selectedRelationId;
-        const showHandles = rel.id === activeHandlesRelationId && !reconnect;
+        const showHandles = selected && !reconnect;
         const draggingThis = reconnect?.relationId === rel.id;
         const stroke = relationStroke(rel.type);
         const label = relationArrowLabel(rel);
+        const handleR = connectorEndpointHandleRadius(selected);
 
-        const drawStart = draggingThis && reconnect.end === "source" ? reconnect.cursor : start;
-        const drawEnd = draggingThis && reconnect.end === "target" ? reconnect.cursor : end;
+        const drawStart =
+          draggingThis && reconnect.end === "source" ? reconnect.lineEnd : start;
+        const drawEnd =
+          draggingThis && reconnect.end === "target" ? reconnect.lineEnd : end;
 
         return (
-          <g
-            key={rel.id}
-            onPointerEnter={() => setHoveredRelationId(rel.id)}
-            onPointerLeave={() =>
-              setHoveredRelationId((id) => (id === rel.id ? null : id))
-            }
-          >
+          <g key={rel.id} data-et2-relation={rel.id}>
             <line
               x1={drawStart.x}
               y1={drawStart.y}
               x2={drawEnd.x}
               y2={drawEnd.y}
               stroke="transparent"
-              strokeWidth={14}
+              strokeWidth={hitWidth}
               className="pointer-events-auto cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
@@ -228,11 +212,7 @@ export function TaskConnectors({
               x2={drawEnd.x}
               y2={drawEnd.y}
               stroke={
-                draggingThis
-                  ? "#ca8a04"
-                  : selected
-                    ? "#0f766e"
-                    : stroke.color
+                draggingThis ? "#ca8a04" : selected ? "#0f766e" : stroke.color
               }
               strokeWidth={selected || draggingThis ? 3 : 2}
               strokeDasharray={
@@ -274,8 +254,8 @@ export function TaskConnectors({
                   cx={end.x}
                   cy={end.y}
                   r={handleR}
-                  fill="#0f766e"
-                  stroke="#fff"
+                  fill="#fff"
+                  stroke="#0f766e"
                   strokeWidth={2 / Math.max(zoom, 0.25)}
                   className="pointer-events-auto cursor-grab"
                   style={{ touchAction: "none" }}
@@ -285,30 +265,32 @@ export function TaskConnectors({
                 </circle>
               </>
             ) : null}
-            {draggingThis ? (
-              <circle
-                cx={reconnect.cursor.x}
-                cy={reconnect.cursor.y}
-                r={handleR}
-                fill={reconnect.end === "target" ? "#0f766e" : "#fff"}
-                stroke={reconnect.end === "target" ? "#fff" : "#0f766e"}
-                strokeWidth={2 / Math.max(zoom, 0.25)}
-                className="pointer-events-none"
-              />
-            ) : null}
           </g>
         );
       })}
 
-      {draftSource ? (
-        <circle
-          cx={taskCardCenter(draftSource).x}
-          cy={taskCardCenter(draftSource).y}
-          r={6}
-          fill="#ca8a04"
-          className="pointer-events-none"
-        />
-      ) : null}
+      {draftSource
+        ? nodes
+            .filter((node) => node.id !== draftSource.id)
+            .map((node) => {
+              const { start } = relationAnchors(draftSource, node);
+              const end = taskCardCenter(node);
+              return (
+                <line
+                  key={`draft-${node.id}`}
+                  x1={start.x}
+                  y1={start.y}
+                  x2={end.x}
+                  y2={end.y}
+                  stroke="#ca8a04"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 4"
+                  opacity={0.35}
+                  className="pointer-events-none"
+                />
+              );
+            })
+        : null}
     </svg>
   );
 }
