@@ -65,6 +65,8 @@ export interface CanvasToolbarProps {
   onCopyDrawio: () => void;
   onExportMermaid: () => void;
   onImportMermaid: () => void;
+  onExportEt2v: () => void;
+  onImportEt2v: () => void;
   pdfExporting: boolean;
   imageExporting: "png" | "svg" | null;
   drawioCopied: boolean;
@@ -149,6 +151,8 @@ export function CanvasToolbar({
   onCopyDrawio,
   onExportMermaid,
   onImportMermaid,
+  onExportEt2v,
+  onImportEt2v,
   pdfExporting,
   imageExporting,
   drawioCopied,
@@ -488,6 +492,30 @@ export function CanvasToolbar({
           >
             <Upload className={iconClass} aria-hidden />
             Mermaid einfügen
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={menuItemClass}
+            onClick={() => {
+              closeMenus();
+              onExportEt2v();
+            }}
+          >
+            <FileText className={iconClass} aria-hidden />
+            ET2V exportieren
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={menuItemClass}
+            onClick={() => {
+              closeMenus();
+              onImportEt2v();
+            }}
+          >
+            <Upload className={iconClass} aria-hidden />
+            ET2V einfügen
           </button>
           <button
             type="button"

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://abx-git.github.io/ET2/schemas/et2v-v1.schema.json",
+  "title": "ET2 Board Compact (ET2V)",
+  "description": "Line-oriented, layout-preserving export for ET2 boards, drill contexts, or subtrees.",
+  "type": "object",
+  "properties": {
+    "format": { "const": "hierarchical-task-manager-et2v" },
+    "version": { "const": 1 },
+    "magicFirstLine": { "const": "# et2v/1" }
+  },
+  "required": ["format", "version"]
+}
