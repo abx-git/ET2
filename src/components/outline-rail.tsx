@@ -56,12 +56,17 @@ function OutlineGap({
     <div
       ref={setNodeRef}
       data-outline-drop-id={outlineGapId(listParentId, beforeId)}
-      className={[
-        "mx-1 rounded transition-all",
-        isOver ? "h-2.5 bg-[var(--list-drop)] ring-1 ring-[var(--list-drop-border)]" : "h-1",
-      ].join(" ")}
+      className="relative z-[1] h-0 w-full"
       aria-hidden
-    />
+    >
+      <div className="absolute inset-x-0 top-0 h-2 -translate-y-1/2" />
+      {isOver ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-0.5 -translate-y-1/2 bg-[var(--list-insert-line)] shadow-[0_0_8px_var(--list-insert-line-glow)]"
+          role="presentation"
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -148,17 +153,15 @@ function OutlineRow({
       data-outline-drop-id={outlineNestId(node.id)}
       data-outline-node-id={node.id}
       className={[
-        "group flex touch-none cursor-grab items-center gap-0.5 rounded-md text-left text-[var(--text)] active:cursor-grabbing",
+        "group relative flex touch-none cursor-grab items-center gap-0.5 text-left text-[var(--text)] active:cursor-grabbing",
         light ? "px-1 py-1 text-sm" : "px-0.5 py-0.5 text-[13px] leading-snug",
         selected
           ? "bg-[var(--control-hover)] font-medium"
           : "hover:bg-[var(--control)]",
-        keyboardFocus ? "list-card-cursor" : "",
+        keyboardFocus ? "list-strip-cursor" : "",
         isDragging ? "opacity-40" : "",
         isNestTarget || isOver
-          ? isNoteNode(node)
-            ? accent.outlineNest
-            : "bg-violet-500/20 ring-1 ring-violet-400/60"
+          ? "list-strip-nest-target"
           : "",
       ].join(" ")}
       style={{ paddingLeft: `${(light ? 8 : 4) + depth * (light ? 16 : 12)}px` }}

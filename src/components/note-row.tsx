@@ -149,7 +149,7 @@ export function NoteRow({
     ...(transform
       ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
       : {}),
-    ...(nestDepth > 0 ? { marginLeft: `${nestDepth * 0.75}rem` } : {}),
+    ...(nestDepth > 0 ? { marginLeft: `${nestDepth * 12}px` } : {}),
     ...noteAccentCssVars(noteAccentColor, listScheme),
   };
 
@@ -264,22 +264,19 @@ export function NoteRow({
       }}
       onContextMenu={handleContextMenu}
       className={[
-        "group relative flex touch-none cursor-grab items-stretch gap-1 rounded-lg px-2 py-2 list-card-surface transition active:cursor-grabbing",
+        "group relative flex touch-none cursor-grab items-stretch gap-1 px-2 py-1.5 transition active:cursor-grabbing list-strip-row",
         nestDepth > 0 ? accent.cardClassNested : accent.cardClass,
         isDragging ? "opacity-40" : "",
-        isNestDropTarget || isOver ? accent.nestDrop : "",
-        isSearchFocus ? "ring-2 ring-amber-300/90" : "",
+        isNestDropTarget || isOver ? "list-strip-nest-target" : "",
+        isSearchFocus ? "list-strip-search" : "",
         isKeyboardFocus && !isSearchFocus
           ? focusMuted
-            ? "list-card-cursor-muted"
-            : "list-card-cursor"
+            ? "list-strip-cursor-muted"
+            : "list-strip-cursor"
           : "",
       ].join(" ")}
     >
-      <span
-        className={["absolute inset-y-0 left-0 w-1 rounded-l-lg", accent.accentBar].join(" ")}
-        aria-hidden
-      />
+      <span className={["list-strip-status-bar", accent.accentBar].join(" ")} aria-hidden />
 
       <div
         className={["mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center", accent.icon].join(
@@ -319,7 +316,10 @@ export function NoteRow({
       </div>
 
       <div
-        className="flex shrink-0 items-start gap-0.5"
+        className={[
+          "list-strip-actions flex shrink-0 items-center gap-0.5",
+          coarsePointer || isKeyboardFocus ? "list-strip-actions-visible" : "",
+        ].join(" ")}
         onPointerDown={(e) => e.stopPropagation()}
       >
         <button

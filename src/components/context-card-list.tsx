@@ -1,6 +1,5 @@
 "use client";
 
-import { useDroppable } from "@dnd-kit/core";
 import { Plus } from "lucide-react";
 import { useEffect } from "react";
 
@@ -9,93 +8,16 @@ import type { CardInteractionMode } from "@/lib/card-expand";
 import { visibleChildrenOf } from "@/lib/card-expand";
 import type { BoardPaneId } from "@/lib/board-pane";
 import { listSchemeFromAppearance } from "@/lib/board-appearance";
-import { contextGapId } from "@/lib/context-list-dnd";
 import { noteAccentClasses } from "@/lib/note-accent";
 import { isNoteNode } from "@/lib/tree-node-kind";
 import { useTaskTreeStore } from "@/store/task-tree-store";
 import type { TaskNode } from "@/types/task-node";
 
 import { NoteRow } from "./note-row";
+import { StripInsertTarget } from "./strip-insert-target";
 import { TaskRow, type TaskTitleSaveMeta } from "./task-row";
 
-function GapDrop({
-  paneId,
-  listParentId,
-  insertIndex,
-  large,
-  emptyHint,
-  splitHints,
-}: {
-  paneId: BoardPaneId;
-  listParentId: string | null;
-  insertIndex: number;
-  large?: boolean;
-  emptyHint?: boolean;
-  splitHints?: boolean;
-}) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: contextGapId(listParentId, insertIndex, paneId),
-    data: { kind: "contextGap" as const, listParentId, insertIndex, paneId },
-  });
-  return (
-    <div
-      ref={setNodeRef}
-      className={[
-        "mx-1 rounded transition-all",
-        large
-          ? isOver
-            ? "min-h-28 border border-dashed border-[var(--list-drop-border)] bg-[var(--list-drop)] px-4 py-8"
-            : "min-h-28 border border-dashed border-[var(--list-border)] bg-[var(--list-card-nested)] px-4 py-8"
-          : isOver
-            ? "h-4 bg-[var(--list-drop)] ring-1 ring-[var(--list-drop-border)]"
-            : "h-2.5",
-      ].join(" ")}
-      aria-hidden={!emptyHint}
-    >
-      {emptyHint ? (
-        <p className="pointer-events-none text-center text-sm text-[var(--list-muted)]">
-          {splitHints ? (
-            <>
-              Keine Einträge hier.{" "}
-              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
-                Tab
-              </kbd>{" "}
-              wechselt das Panel,{" "}
-              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
-                Enter
-              </kbd>{" "}
-              legt eine Karte an.
-            </>
-          ) : (
-            <>
-              Keine Einträge hier.{" "}
-              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
-                Enter
-              </kbd>{" "}
-              /{" "}
-              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
-                Tab
-              </kbd>{" "}
-              für Karten,{" "}
-              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
-                Shift+Enter
-              </kbd>{" "}
-              /{" "}
-              <kbd className="rounded border border-[var(--list-border)] bg-[var(--list-card)] px-1 text-[11px]">
-                Shift+Tab
-              </kbd>{" "}
-              für Notizen.
-            </>
-          )}
-          <span className="mt-2 block text-xs text-[var(--list-muted)] opacity-80">
-            Oder Karte aus der Zwischenablage hierher ziehen.
-          </span>
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
+const STRIP_INDENT_PX = 12;
 type CardBranchSharedProps = {
   paneId: BoardPaneId;
   paneActive: boolean;
@@ -238,7 +160,12 @@ function NestedCardBranch({
 
   return (
     <div className="space-y-0">
-      <GapDrop paneId={paneId} listParentId={listParentId} insertIndex={0} />
+      <StripInsertTarget
+        paneId={paneId}
+        listParentId={listParentId}
+        insertIndex={0}
+        indentPx={depth * STRIP_INDENT_PX}
+      />
       {nodes.map((node, index) => {
         const collapsed = cardCollapsedIds.has(node.id);
         const kids =
@@ -254,7 +181,7 @@ function NestedCardBranch({
               {...shared}
             />
             {kids.length > 0 ? (
-              <div className="mt-0.5 ml-3 border-l border-[var(--list-border)] pl-1">
+              <div className="border-l border-[var(--list-border)]">
                 <NestedCardBranch
                   nodes={kids}
                   listParentId={node.id}
@@ -263,7 +190,12 @@ function NestedCardBranch({
                 />
               </div>
             ) : null}
-            <GapDrop paneId={paneId} listParentId={listParentId} insertIndex={index + 1} />
+            <StripInsertTarget
+              paneId={paneId}
+              listParentId={listParentId}
+              insertIndex={index + 1}
+              indentPx={depth * STRIP_INDENT_PX}
+            />
           </div>
         );
       })}
@@ -438,12 +370,11 @@ export function ContextCardList({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-0 overflow-y-auto pb-8">
-        <GapDrop
+      <div className="list-strip-rack min-h-0 flex-1 overflow-y-auto pb-4">
+        <StripInsertTarget
           paneId={paneId}
           listParentId={contextNodeId}
           insertIndex={0}
-          large={nodes.length === 0}
           emptyHint={nodes.length === 0}
           splitHints={splitHints}
         />
@@ -462,7 +393,7 @@ export function ContextCardList({
                 {...shared}
               />
               {kids.length > 0 ? (
-                <div className="mt-0.5 ml-3 border-l border-[var(--list-border)] pl-1">
+                <div className="border-l border-[var(--list-border)]">
                   <NestedCardBranch
                     nodes={kids}
                     listParentId={node.id}
@@ -471,7 +402,11 @@ export function ContextCardList({
                   />
                 </div>
               ) : null}
-              <GapDrop paneId={paneId} listParentId={contextNodeId} insertIndex={index + 1} />
+              <StripInsertTarget
+                paneId={paneId}
+                listParentId={contextNodeId}
+                insertIndex={index + 1}
+              />
             </div>
           );
         })}

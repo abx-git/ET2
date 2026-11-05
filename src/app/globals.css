@@ -117,7 +117,70 @@ body {
       var(--list-shadow);
   }
 
-  /* Aktiver Listen-Cursor: Outline, damit der Rand nicht vom Kartenschatten überdeckt wird. */
+  /* Streifen-Ansicht (Listenmodus): flache Zeilen ohne Schatten. */
+  .list-strip-row {
+    min-height: 2.25rem;
+    border-bottom: 1px solid var(--list-border);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .list-strip-row:hover {
+    background: var(--list-hover);
+  }
+
+  .list-strip-status-bar {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 3px;
+    border-radius: 0;
+  }
+
+  .list-strip-cursor {
+    box-shadow: inset 3px 0 0 var(--list-focus);
+  }
+
+  .list-strip-cursor-muted {
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--list-muted) 55%, transparent);
+  }
+
+  .list-strip-search {
+    box-shadow: inset 3px 0 0 #fbbf24;
+  }
+
+  .list-strip-nest-target::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    background: var(--list-insert-line);
+    pointer-events: none;
+  }
+
+  .list-strip-overdue {
+    box-shadow: inset 3px 0 0 rgb(248 113 113);
+  }
+
+  .list-strip-actions {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  .group:hover .list-strip-actions,
+  .group:focus-within .list-strip-actions,
+  .list-strip-actions-visible {
+    opacity: 1;
+  }
+
+  .list-strip-rack {
+    border: 1px solid var(--list-border);
+    background: var(--list-card);
+  }
+
+  /* Canvas-Karten: weiterhin Schatten möglich */
   .list-card-cursor {
     outline: 2px solid var(--list-focus);
     outline-offset: 1px;

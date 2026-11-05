@@ -21,6 +21,7 @@ export const APPEARANCE_PRESETS: { id: string; label: string; appearance: BoardA
   { id: "midnight", label: "Mitternacht", appearance: { canvas: "#0b1020", sidebar: "#121826" } },
   { id: "tinte", label: "Tinte", appearance: { canvas: "#1c1a2e", sidebar: "#161428" } },
   { id: "graphit", label: "Graphit", appearance: { canvas: "#2a2d32", sidebar: "#22252a" } },
+  { id: "tower", label: "Tower (Streifen)", appearance: { canvas: "#1e2430", sidebar: "#161e28" } },
 ];
 
 export function normalizeAppearance(raw: unknown): BoardAppearance {
@@ -137,6 +138,8 @@ export function appearanceToCssVars(appearance: BoardAppearance): Record<string,
     "--list-shadow": lightList
       ? "0 1px 2px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.06)"
       : "0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.28)",
+    "--list-insert-line": listFocus,
+    "--list-insert-line-glow": rgba(listFocus, lightList ? 0.45 : 0.55),
     "--list-ring": rgba(listFocus, 0.55),
   };
 }

@@ -40,6 +40,12 @@ describe("appearanceToCssVars", () => {
     expect(vars["color-scheme"]).toBe("dark");
   });
 
+  it("derives insert-line tokens for strip drag feedback", () => {
+    const vars = appearanceToCssVars(DEFAULT_APPEARANCE);
+    expect(vars["--list-insert-line"]).toBe(vars["--list-focus"]);
+    expect(vars["--list-insert-line-glow"]).toContain("rgba");
+  });
+
   it("elevates list cards above the canvas without relying on a border", () => {
     const light = appearanceToCssVars(DEFAULT_APPEARANCE);
     expect(light["--list-card"].toLowerCase()).not.toBe(DEFAULT_APPEARANCE.canvas.toLowerCase());

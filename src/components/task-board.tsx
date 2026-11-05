@@ -201,13 +201,13 @@ function DragPreviewCard({ id }: { id: string }) {
   if (!node) return null;
   const label = nodeDisplayTitle(node);
   return (
-    <div className="pointer-events-none w-72 max-w-[85vw] rounded-lg border border-slate-200 bg-white p-3 shadow-2xl ring-2 ring-sky-200/90">
-      <p className="text-sm font-semibold text-slate-900">
+    <div className="pointer-events-none max-w-[85vw] border border-[var(--list-border)] bg-[var(--list-card)] px-3 py-1.5 shadow-lg ring-1 ring-[var(--list-focus)]">
+      <p className="truncate text-sm font-medium text-[var(--list-text)]">
         {isNoteNode(node) ? "Notiz: " : ""}
         {label}
       </p>
       {node.children.length > 0 ? (
-        <p className="mt-1 text-[11px] text-slate-500">
+        <p className="mt-0.5 text-[11px] text-[var(--list-muted)]">
           inkl. {node.children.length} direkte Unterkarte
           {node.children.length === 1 ? "" : "n"}
         </p>

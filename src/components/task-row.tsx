@@ -268,7 +268,7 @@ export function TaskRow({
     ...(transform
       ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
       : {}),
-    ...(nestDepth > 0 ? { marginLeft: `${nestDepth * 0.75}rem` } : {}),
+    ...(nestDepth > 0 ? { marginLeft: `${nestDepth * 12}px` } : {}),
     ...cardColorCssVars(node.cardColor, listScheme),
   };
 
@@ -476,29 +476,31 @@ export function TaskRow({
       }}
       onContextMenu={handleContextMenu}
       className={[
-        "group relative flex touch-none cursor-grab items-stretch gap-1 rounded-lg px-2 py-2 list-card-surface transition active:cursor-grabbing",
+        "group relative flex touch-none cursor-grab items-stretch gap-1 px-2 py-1.5 transition active:cursor-grabbing list-strip-row",
         surface,
         isDragging ? "opacity-40" : "",
-        isNestDropTarget || isOver
-          ? "bg-[var(--list-drop)] ring-2 ring-[var(--list-drop-border)]"
-          : "",
-        isSearchFocus ? "ring-2 ring-amber-300/90" : "",
+        isNestDropTarget || isOver ? "list-strip-nest-target" : "",
+        isSearchFocus ? "list-strip-search" : "",
         isKeyboardFocus && !isSearchFocus
           ? focusMuted
-            ? "list-card-cursor-muted"
-            : "list-card-cursor"
+            ? "list-strip-cursor-muted"
+            : "list-strip-cursor"
           : "",
-        isDueOverdue(rollupOverdue ?? null, done) ? "ring-1 ring-red-400/70" : "",
+        isDueOverdue(rollupOverdue ?? null, done) &&
+        !isSearchFocus &&
+        !(isKeyboardFocus && !focusMuted)
+          ? "list-strip-overdue"
+          : "",
       ].join(" ")}
     >
       {accent ? (
-        <span className={["absolute inset-y-0 left-0 w-1 rounded-l-lg", accent].join(" ")} aria-hidden />
+        <span className={["list-strip-status-bar", accent].join(" ")} aria-hidden />
       ) : null}
 
       {fieldVisibility.completedCheck ? (
         <button
           type="button"
-          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded text-[var(--list-muted)] hover:bg-[var(--list-hover)] hover:text-[var(--list-text)]"
+          className="flex h-7 w-7 shrink-0 items-center justify-center text-[var(--list-muted)] hover:bg-[var(--list-hover)] hover:text-[var(--list-text)]"
           aria-label={done ? "Als offen markieren" : "Als erledigt markieren"}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
@@ -630,12 +632,15 @@ export function TaskRow({
       </div>
 
       <div
-        className="flex shrink-0 items-start gap-0.5"
+        className={[
+          "list-strip-actions flex shrink-0 items-center gap-0.5",
+          coarsePointer || isKeyboardFocus ? "list-strip-actions-visible" : "",
+        ].join(" ")}
         onPointerDown={(e) => e.stopPropagation()}
       >
         <button
           type="button"
-          className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--list-focus)] bg-[var(--list-add-bg)] text-[var(--list-add-text)] hover:opacity-90"
+          className="list-icon-btn border border-[var(--list-border)] bg-[var(--list-add-bg)] text-[var(--list-add-text)] hover:opacity-90"
           title="Unterkarte"
           aria-label="Unterkarte anlegen"
           onClick={(e) => {
