@@ -14,6 +14,7 @@ import {
   type BoardImportPayload,
   type BoardSnapshotV1,
 } from "@/lib/task-tree-json";
+import { mergeCardFieldVisibility } from "@/lib/card-field-visibility";
 import { getTemplatesSnapshot, mergeIncomingBoardTemplates, seedTemplatesFromBoard } from "@/lib/templates";
 import { useTaskTreeStore, runWithoutBoardHistory } from "@/store/task-tree-store";
 
@@ -96,6 +97,62 @@ export function applyBoardJsonToStoreInPlace(json: string): boolean {
   if (!payload) return false;
   applyBoardPayloadToStoreInPlace(payload);
   return true;
+}
+
+export function boardSnapshotFromImportPayload(payload: BoardImportPayload): BoardSnapshotV1 {
+  return buildBoardSnapshot(
+    payload.roots,
+    payload.pathIds,
+    payload.columnTitleOverrides,
+    mergeCardFieldVisibility(payload.cardFieldVisibility),
+    payload.hideCompletedTasks ?? false,
+    payload.effortOnTasksEnabled !== false,
+    payload.filterTags ?? [],
+    payload.completedTag,
+    payload.collapsedIds ?? [],
+    payload.clipboardRoots ?? [],
+    payload.templates ?? [],
+    payload.filterColors ?? [],
+    payload.filterScheduleKinds ?? [],
+    payload.cardCollapsedIds ?? [],
+    payload.cardInteractionMode ?? "expand",
+    payload.filterCombineMode ?? "and",
+    payload.noteAccentColor,
+    payload.filterExcludeTags ?? [],
+    payload.relations ?? [],
+    payload.appearance,
+    payload.canvasGroups ?? {},
+  );
+}
+
+export function boardPayloadFromStoreState(): BoardImportPayload {
+  const s = useTaskTreeStore.getState();
+  const templates = getTemplatesSnapshot();
+  return boardSnapshotToReplacePayload(
+    buildBoardSnapshot(
+      s.roots,
+      s.pathIds,
+      s.columnTitleOverrides,
+      s.cardFieldVisibility,
+      s.hideCompletedTasks,
+      s.effortOnTasksEnabled,
+      s.filterTags,
+      s.completedTag,
+      s.collapsedIds,
+      s.clipboardRoots,
+      templates,
+      s.filterColors,
+      s.filterScheduleKinds,
+      s.cardCollapsedIds,
+      s.cardInteractionMode,
+      s.filterCombineMode,
+      s.noteAccentColor,
+      s.filterExcludeTags,
+      s.relations,
+      s.appearance,
+      s.canvasGroups,
+    ),
+  );
 }
 
 export function boardJsonFromStoreState(): string {

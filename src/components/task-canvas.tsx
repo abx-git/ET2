@@ -12,7 +12,10 @@ import { TaskConnectors } from "@/components/task-connectors";
 import { TaskDetailSidebar } from "@/components/task-detail-sidebar";
 import { CanvasGroupBox } from "@/components/canvas-group-box";
 import { KeyboardShortcutsHelpDialog } from "@/components/keyboard-shortcuts-help-dialog";
-import { contextChildren } from "@/lib/board-context";
+import { contextChildren, contextPathIds } from "@/lib/board-context";
+import { parseEt2vImport } from "@/lib/board-import-text";
+import { boardPayloadFromStoreState } from "@/lib/file-board-reconcile";
+import { encodeEt2vFromPayload, et2vExportFilename } from "@/lib/et2v";
 import { nodeMatchesBoardFilters } from "@/lib/board-filters";
 import { nodeHasCanvasPosition } from "@/lib/canvas-layout";
 import { compareCanvasStackOrder } from "@/lib/canvas-stack";
@@ -175,6 +178,8 @@ export function TaskCanvas({
   const alignCanvasSelection = useTaskTreeStore((s) => s.alignCanvasSelection);
   const duplicateCanvasSelection = useTaskTreeStore((s) => s.duplicateCanvasSelection);
   const importCanvasMermaid = useTaskTreeStore((s) => s.importCanvasMermaid);
+  const importEt2vContext = useTaskTreeStore((s) => s.importEt2vContext);
+  const importSubtreeRoot = useTaskTreeStore((s) => s.importSubtreeRoot);
 
   const shellRef = useRef<HTMLDivElement>(null);
   const [panning, setPanning] = useState(false);
@@ -200,6 +205,9 @@ export function TaskCanvas({
   const [mermaidExportOpen, setMermaidExportOpen] = useState(false);
   const [mermaidExportText, setMermaidExportText] = useState("");
   const [mermaidPasteOpen, setMermaidPasteOpen] = useState(false);
+  const [et2vExportOpen, setEt2vExportOpen] = useState(false);
+  const [et2vExportText, setEt2vExportText] = useState("");
+  const [et2vPasteOpen, setEt2vPasteOpen] = useState(false);
   const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
   const spaceDown = useRef(false);
   const multiDrag = useRef<{ ox: number; oy: number } | null>(null);
@@ -620,6 +628,52 @@ export function TaskCanvas({
     [importCanvasMermaid],
   );
 
+  const openEt2vExport = useCallback(() => {
+    const payload = boardPayloadFromStoreState();
+    const pathIds = contextPathIds(roots, contextNodeId);
+    const text = encodeEt2vFromPayload(payload, {
+      scope: "context",
+      pathIds,
+      title: "Canvas",
+    });
+    setEt2vExportText(text);
+    setEt2vExportOpen(true);
+  }, [roots, contextNodeId]);
+
+  const applyEt2vImport = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        window.alert("Kein Inhalt.");
+        return;
+      }
+      const parsed = parseEt2vImport(trimmed);
+      if (parsed.context) {
+        importEt2vContext(
+          contextNodeId,
+          parsed.context.roots,
+          parsed.context.relations ?? [],
+          parsed.context.canvasGroups ?? {},
+        );
+        setEt2vPasteOpen(false);
+        return;
+      }
+      if (parsed.subtreeRoot) {
+        importSubtreeRoot(contextNodeId, parsed.subtreeRoot);
+        setEt2vPasteOpen(false);
+        return;
+      }
+      if (parsed.board) {
+        window.alert(
+          "Vollständiges Board-ET2V bitte unter Daten → Backup einspielen importieren.",
+        );
+        return;
+      }
+      window.alert("Ungültiges ET2V — erwartet wird # et2v/1 oder ein ET2V-Paket.");
+    },
+    [contextNodeId, importEt2vContext, importSubtreeRoot],
+  );
+
   const selectCanvasNodeForMenu = useCallback((nodeId: string) => {
     const multi = useTaskTreeStore.getState().selectedCanvasNodeIds;
     if (multi.length > 1 && multi.includes(nodeId)) {
@@ -895,6 +949,12 @@ export function TaskCanvas({
         }}
         onImportMermaid={() => {
           setMermaidPasteOpen(true);
+        }}
+        onExportEt2v={() => {
+          openEt2vExport();
+        }}
+        onImportEt2v={() => {
+          setEt2vPasteOpen(true);
         }}
         pdfExporting={pdfExporting}
         imageExporting={imageExporting}
@@ -1687,6 +1747,28 @@ export function TaskCanvas({
         fileButtonLabel="Datei laden"
         onClose={() => setMermaidPasteOpen(false)}
         onApplyPastedText={applyMermaidImport}
+      />
+      <TextExportPreviewDialog
+        open={et2vExportOpen}
+        title="ET2V-Export (Canvas-Kontext)"
+        hint="Kompaktes Format für KI und Datenaustausch. Layout und Hierarchie dieser Canvas-Ebene bleiben erhalten."
+        text={et2vExportText}
+        contentLabel="ET2V"
+        downloadFilename={et2vExportFilename("canvas", "context")}
+        downloadMime="text/plain;charset=utf-8"
+        downloadLabel=".et2v.txt herunterladen"
+        onClose={() => setEt2vExportOpen(false)}
+      />
+      <JsonPasteImportDialog
+        open={et2vPasteOpen}
+        title="ET2V einfügen"
+        hint="ET2V (# et2v/1) oder ET2V-Paket für diese Canvas-Ebene. Ersetzt die direkten Kinder des aktuellen Kontexts (inkl. Relations und Gruppen)."
+        placeholder={"# et2v/1\n@format hierarchical-task-manager-et2v\n…"}
+        applyLabel="In Canvas-Kontext importieren"
+        fileAccept=".txt,.et2v,text/plain"
+        fileButtonLabel="Datei laden"
+        onClose={() => setEt2vPasteOpen(false)}
+        onApplyPastedText={applyEt2vImport}
       />
     </div>
   );

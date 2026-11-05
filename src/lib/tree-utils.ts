@@ -332,6 +332,20 @@ export function detachNodeById(
 }
 
 /** Fügt `insert` als Kind von `parentId` (null = Wurzel) an `index` in die Geschwisterliste ein. */
+/** Ersetzt die Kinderliste eines Knotens (oder die Wurzeln bei `parentId === null`). */
+export function replaceChildrenUnderParent(
+  nodes: TaskNode[],
+  parentId: string | null,
+  children: TaskNode[],
+): TaskNode[] {
+  if (parentId === null) return children;
+  return nodes.map((n) => {
+    if (n.id === parentId) return { ...n, children };
+    if (!n.children.length) return n;
+    return { ...n, children: replaceChildrenUnderParent(n.children, parentId, children) };
+  });
+}
+
 export function insertUnderParent(
   nodes: TaskNode[],
   parentId: string | null,

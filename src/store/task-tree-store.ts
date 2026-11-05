@@ -15,6 +15,7 @@ import {
   findNodeById,
   getSiblingsList,
   insertUnderParent,
+  replaceChildrenUnderParent,
   normalizePathIds,
   pathFromRootToNode,
   pathIdsAfterNodeMove,
@@ -39,7 +40,7 @@ import { applyOutlineDrop, insertNodeIntoOutline, type OutlineDrop } from "@/lib
 import { convertCardToNoteInForest } from "@/lib/note-merge";
 import { refreshCalculatedEffortsInTree } from "@/lib/task-effort";
 import { collectAllNodeIds, generateUniqueTaskId, generateUniqueTaskIdFromTaken } from "@/lib/task-id";
-import { remapTaskNodeForest, remapTaskNodeIds } from "@/lib/task-tree-json";
+import { remapTaskNodeForest, remapTaskNodeForestWithIdMap, remapTaskNodeIds } from "@/lib/task-tree-json";
 import {
   collapsedIdsAfterBoardDepthAction,
   defaultBoardCollapsedIds,
@@ -466,6 +467,16 @@ export interface TaskTreeState {
    * IDs im `root` werden neu vergeben, um Kollisionen zu vermeiden.
    */
   importSubtreeRoot: (parentId: string | null, root: TaskNode) => void;
+  /**
+   * ET2V-Kontextimport: ersetzt die direkten Kinder von `parentId` (`null` = Wurzeln),
+   * übernimmt Relations zwischen diesen Geschwistern und Canvas-Gruppen für den Kontext.
+   */
+  importEt2vContext: (
+    parentId: string | null,
+    roots: TaskNode[],
+    relations: TaskRelation[],
+    canvasGroups: Record<string, CanvasGroup[]>,
+  ) => void;
   /**
    * Vorlage unter `parentId` einfügen.
    * `children`: Kinder der Vorlagen-Wurzel (oder die Wurzel selbst, wenn blatt).
@@ -1813,6 +1824,48 @@ export const useTaskTreeStore = create<TaskTreeState>()(
         s.completedTag,
       );
       return { roots: nextRoots, pathIds: normalizePathIds(nextRoots, s.pathIds) };
+    });
+  },
+
+  importEt2vContext: (parentId, roots, relations, canvasGroups) => {
+    set((s) => {
+      if (parentId !== null && !findNodeById(s.roots, parentId)) return {};
+      const takenNow = collectAllNodeIds([...s.roots, ...s.clipboardRoots]);
+      const { roots: fresh, idMap } = remapTaskNodeForestWithIdMap(roots, takenNow);
+      const oldChildren =
+        parentId === null
+          ? s.roots
+          : (findNodeById(s.roots, parentId)?.children ?? []);
+      const oldIds = new Set(oldChildren.map((c) => c.id));
+      const nextRoots = refreshCalculatedEffortsInTree(
+        replaceChildrenUnderParent(s.roots, parentId, fresh),
+        s.completedTag,
+      );
+      const keptRels = s.relations.filter(
+        (r) => !(oldIds.has(r.sourceId) && oldIds.has(r.targetId)),
+      );
+      const mergedRels = [...keptRels];
+      for (const r of relations) {
+        mergedRels.push({
+          ...r,
+          id: createRelationId(mergedRels),
+          sourceId: idMap.get(r.sourceId) ?? r.sourceId,
+          targetId: idMap.get(r.targetId) ?? r.targetId,
+        });
+      }
+      const nextRelations = sanitizeRelations(nextRoots, mergedRels);
+      const ctxKey = parentId ?? "__root__";
+      const nextCanvasGroups = { ...s.canvasGroups };
+      const imported = canvasGroups[ctxKey] ?? canvasGroups.__root__ ?? [];
+      if (imported.length) {
+        nextCanvasGroups[ctxKey] = imported;
+      }
+      return {
+        roots: nextRoots,
+        relations: nextRelations,
+        canvasGroups: nextCanvasGroups,
+        pathIds: normalizePathIds(nextRoots, s.pathIds),
+      };
     });
   },
 

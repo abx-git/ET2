@@ -60,6 +60,9 @@ export interface DataStoragePanelProps {
   onExportMindmap: () => void;
   onShowJsonCopy: () => void;
   onExportSchema: () => void;
+  onExportEt2v?: () => void;
+  onCopyEt2vPackage?: () => void;
+  onExportEt2vSchema?: () => void;
   busy?: boolean;
 }
 
@@ -130,6 +133,9 @@ export function DataStoragePanel({
   onExportMindmap,
   onShowJsonCopy,
   onExportSchema,
+  onExportEt2v,
+  onCopyEt2vPackage,
+  onExportEt2vSchema,
   busy,
 }: DataStoragePanelProps) {
   const [activeTab, setActiveTab] = useState<StorageTabId>("file");
@@ -490,9 +496,39 @@ export function DataStoragePanel({
                 <FileCode2 className="h-4 w-4 shrink-0" aria-hidden />
                 Schema exportieren (.json)
               </button>
+              {onExportEt2v ? (
+                <button
+                  type="button"
+                  onClick={onExportEt2v}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <FileCode2 className="h-4 w-4 shrink-0" aria-hidden />
+                  ET2V exportieren (kompakt)
+                </button>
+              ) : null}
+              {onCopyEt2vPackage ? (
+                <button
+                  type="button"
+                  onClick={onCopyEt2vPackage}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <Copy className="h-4 w-4 shrink-0" aria-hidden />
+                  ET2V-Paket kopieren (KI)
+                </button>
+              ) : null}
+              {onExportEt2vSchema ? (
+                <button
+                  type="button"
+                  onClick={onExportEt2vSchema}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <FileCode2 className="h-4 w-4 shrink-0" aria-hidden />
+                  ET2V-Schema exportieren
+                </button>
+              ) : null}
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-              Das Schema beschreibt die Struktur der Arbeitsdatei bzw. von Board-/Teilbaum-Exporten.
+              JSON-Schema: Arbeitsdatei. ET2V: kompaktes Zeilenformat für KI und Layout-Austausch.
             </p>
           </Section>
           </>

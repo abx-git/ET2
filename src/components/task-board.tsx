@@ -45,7 +45,21 @@ import {
   type BoardPaneId,
   type PaneContexts,
 } from "@/lib/board-pane";
-import { applyBoardJsonToStore, applyBoardPayloadToStore, boardJsonFromStoreState } from "@/lib/file-board-reconcile";
+import {
+  applyBoardJsonToStore,
+  applyBoardPayloadToStore,
+  boardJsonFromStoreState,
+  boardPayloadFromStoreState,
+  boardSnapshotFromImportPayload,
+} from "@/lib/file-board-reconcile";
+import { parseEt2vImport } from "@/lib/board-import-text";
+import {
+  ET2V_SCHEMA_FILENAME,
+  buildEt2vClipboardPackage,
+  encodeEt2vFromPayload,
+  et2vExportFilename,
+  stringifyEt2vSchema,
+} from "@/lib/et2v";
 import {
   getMobileLayoutServerSnapshot,
   getMobileLayoutSnapshot,
@@ -177,7 +191,12 @@ import { CardFieldVisibilityDialog } from "./card-field-visibility-dialog";
 import { ConfirmDialog } from "./confirm-dialog";
 import { ImportSubtreeDialog } from "./import-subtree-dialog";
 import { FilterResultsDialog } from "./filter-results-dialog";
-import { BranchExportDialog, JsonExportPreviewDialog, JsonPasteImportDialog } from "./json-clipboard-dialog";
+import {
+  BranchExportDialog,
+  JsonExportPreviewDialog,
+  JsonPasteImportDialog,
+  TextExportPreviewDialog,
+} from "./json-clipboard-dialog";
 import { PasteListDialog } from "./paste-list-dialog";
 import { TemplateInsertDialog } from "./template-insert-dialog";
 import { TemplateSaveDialog } from "./template-save-dialog";
@@ -330,6 +349,8 @@ export function TaskBoard() {
   const [workingFileSetupOpen, setWorkingFileSetupOpen] = useState(false);
   const [titleEditNodeId, setTitleEditNodeId] = useState<string | null>(null);
   const [boardJsonExportOpen, setBoardJsonExportOpen] = useState(false);
+  const [boardEt2vExportOpen, setBoardEt2vExportOpen] = useState(false);
+  const [boardEt2vExportText, setBoardEt2vExportText] = useState("");
   const [pasteImportOpen, setPasteImportOpen] = useState(false);
   const [workingFilePasteOpen, setWorkingFilePasteOpen] = useState(false);
   const [pasteSubtreeParentId, setPasteSubtreeParentId] = useState<string | null>(null);
@@ -895,6 +916,13 @@ export function TaskBoard() {
       window.alert("Kein Inhalt.");
       return;
     }
+    const et2vSubtree = parseEt2vImport(trimmed).subtreeRoot;
+    if (et2vSubtree) {
+      importSubtreeRoot(parentId, et2vSubtree);
+      setPasteSubtreeParentId(null);
+      expandToNode(parentId);
+      return;
+    }
     try {
       const doc = parseExportedDocument(trimmed);
       if (isBoardSnapshot(doc)) {
@@ -971,6 +999,21 @@ export function TaskBoard() {
         return;
       }
     }
+    const et2v = parseEt2vImport(trimmed);
+    if (et2v.board) {
+      setPendingBoardImport(boardSnapshotFromImportPayload(et2v.board));
+      setPasteImportOpen(false);
+      return;
+    }
+    if (et2v.subtreeRoot) {
+      setPendingSubtreeImport(et2v.subtreeRoot);
+      setPasteImportOpen(false);
+      return;
+    }
+    if (et2v.context) {
+      window.alert("Kontext-ET2V bitte in der Canvas-Ansicht einfügen (Export → ET2V einfügen).");
+      return;
+    }
     try {
       const doc = parseExportedDocument(trimmed);
       if (isBoardSnapshot(doc)) {
@@ -983,10 +1026,33 @@ export function TaskBoard() {
         setPasteImportOpen(false);
         return;
       }
+      window.alert("Unbekanntes Format — Board-JSON, ET2V oder FreeMind (.mm) erwartet.");
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Import fehlgeschlagen.");
     }
   };
+
+  const openBoardEt2vExport = useCallback(() => {
+    const payload = boardPayloadFromStoreState();
+    const text = encodeEt2vFromPayload(payload, { scope: "board", title: "Board" });
+    setBoardEt2vExportText(text);
+    setBoardEt2vExportOpen(true);
+  }, []);
+
+  const copyBoardEt2vPackage = useCallback(async () => {
+    const payload = boardPayloadFromStoreState();
+    const pack = buildEt2vClipboardPackage(payload, { scope: "board", title: "Board" });
+    try {
+      await navigator.clipboard.writeText(pack);
+      window.alert("ET2V-Paket (Prompt + Schema + Daten) in die Zwischenablage kopiert.");
+    } catch {
+      window.alert("Kopieren fehlgeschlagen.");
+    }
+  }, []);
+
+  const downloadEt2vSchema = useCallback(() => {
+    downloadTextFile(ET2V_SCHEMA_FILENAME, stringifyEt2vSchema(), "application/schema+json");
+  }, []);
 
   const handleImportFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
@@ -2371,9 +2437,22 @@ export function TaskBoard() {
       <JsonPasteImportDialog
         open={pasteImportOpen}
         title="Backup einspielen (Text)"
-        hint="Board-JSON (scope „board“), Teilbaum-JSON (scope „subtree“) oder FreeMind-/Freeplane-XML (.mm). Ein vollständiges Board ersetzt alle Karten nach Bestätigung."
+        hint="Board-JSON (scope „board“), ET2V (# et2v/1), Teilbaum-JSON (scope „subtree“) oder FreeMind-/Freeplane-XML (.mm). Ein vollständiges Board ersetzt alle Karten nach Bestätigung."
+        fileAccept=".json,.txt,.mm,.xml,text/plain,application/json,application/xml"
+        fileButtonLabel="Datei laden"
         onClose={() => setPasteImportOpen(false)}
         onApplyPastedText={applyImportedText}
+      />
+      <TextExportPreviewDialog
+        open={boardEt2vExportOpen}
+        title="ET2V-Export (gesamtes Board)"
+        hint="Kompaktes, KI-freundliches Format mit Hierarchie, Canvas-Layout, Relations und Gruppen."
+        text={boardEt2vExportText}
+        contentLabel="ET2V"
+        downloadFilename={et2vExportFilename("board", "full")}
+        downloadMime="text/plain;charset=utf-8"
+        downloadLabel=".et2v.txt herunterladen"
+        onClose={() => setBoardEt2vExportOpen(false)}
       />
       <JsonPasteImportDialog
         open={pasteSubtreeParentId !== null}
@@ -2536,6 +2615,16 @@ export function TaskBoard() {
         }}
         onExportSchema={() => {
           downloadExportSchema();
+        }}
+        onExportEt2v={() => {
+          setDataStoragePanelOpen(false);
+          openBoardEt2vExport();
+        }}
+        onCopyEt2vPackage={() => {
+          void copyBoardEt2vPackage();
+        }}
+        onExportEt2vSchema={() => {
+          downloadEt2vSchema();
         }}
       />
       <KeyboardShortcutsHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />

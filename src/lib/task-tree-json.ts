@@ -45,6 +45,7 @@ import {
   serializeCanvasGroupsMap,
   type CanvasGroup,
 } from "@/lib/canvas-group";
+import { boardImportPayloadFromImportText } from "@/lib/board-import-text";
 import hierarchicalTaskManagerExportV1Schema from "@/schemas/hierarchical-task-manager.export.v1.schema.json";
 
 export const EXPORT_FORMAT = "hierarchical-task-manager" as const;
@@ -342,6 +343,28 @@ export function remapTaskNodeIds(root: TaskNode, taken?: Set<string>): TaskNode 
 export function remapTaskNodeForest(roots: TaskNode[], taken?: Set<string>): TaskNode[] {
   const used = taken ?? new Set<string>();
   return roots.map((r) => remapTaskNodeIds(r, used));
+}
+
+/** Wie `remapTaskNodeForest`, liefert zusätzlich alte→neue ID-Zuordnung (für Relations). */
+export function remapTaskNodeForestWithIdMap(
+  roots: TaskNode[],
+  taken?: Set<string>,
+): { roots: TaskNode[]; idMap: Map<string, string> } {
+  const used = taken ?? new Set<string>();
+  const idMap = new Map<string, string>();
+  function walk(n: TaskNode): TaskNode {
+    const id = generateUniqueTaskIdFromTaken(used);
+    used.add(id);
+    idMap.set(n.id, id);
+    return {
+      ...n,
+      id,
+      dueDate: n.dueDate ? new Date(n.dueDate.getTime()) : null,
+      reminderDate: n.reminderDate ? new Date(n.reminderDate.getTime()) : null,
+      children: n.children.map(walk),
+    };
+  }
+  return { roots: roots.map(walk), idMap };
 }
 
 function parseBoardTemplateRecord(raw: unknown, path: string): TemplateRecordV1 {
@@ -980,6 +1003,8 @@ export function boardImportPayloadFromExportText(text: string): BoardImportPaylo
       columnTitleOverrides: {},
     };
   }
+  const fromEt2v = boardImportPayloadFromImportText(trimmed);
+  if (fromEt2v) return fromEt2v;
   try {
     const doc = parseExportedDocument(trimmed);
     if (!isBoardSnapshot(doc)) return null;
