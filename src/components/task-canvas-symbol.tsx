@@ -4,6 +4,12 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { isCoarsePointerDevice } from "@/lib/coarse-pointer";
 import { canvasStackCssZIndex } from "@/lib/canvas-stack";
+import {
+  beginCanvasResizeGesture,
+  beginCanvasRotateGesture,
+  CANVAS_RESIZE_HANDLE_CLASSES,
+  type CanvasResizeHandle,
+} from "@/lib/canvas-resize-gesture";
 import { taskCardRect } from "@/lib/connector-geometry";
 import { getSymbolTypeDefinition, type SymbolType } from "@/lib/diagram-symbol";
 import {
@@ -19,19 +25,6 @@ import type { TaskNode } from "@/types/task-node";
 
 const MIN_SIZE = 40;
 const ROTATION_SNAP = 15;
-
-type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
-
-const HANDLE_POSITIONS: Record<ResizeHandle, string> = {
-  n: "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize",
-  s: "left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-ns-resize",
-  e: "right-0 top-1/2 translate-x-1/2 -translate-y-1/2 cursor-ew-resize",
-  w: "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize",
-  ne: "right-0 top-0 translate-x-1/2 -translate-y-1/2 cursor-nesw-resize",
-  nw: "left-0 top-0 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize",
-  se: "right-0 bottom-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize",
-  sw: "left-0 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize",
-};
 
 function SymbolShape({ type }: { type: SymbolType }) {
   const stroke = "#334155";
@@ -262,69 +255,37 @@ export function TaskCanvasSymbol({
     editing: Boolean(editing),
   });
 
-  const startResize = (handle: ResizeHandle, e: React.PointerEvent) => {
+  const minW = isEntity ? entityTableMinWidth() : MIN_SIZE;
+  const minH = isEntity ? entityTableMinHeight(attrs) : MIN_SIZE;
+
+  const startResize = (handle: CanvasResizeHandle, e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const ox = rect.x;
-    const oy = rect.y;
-    const ow = rect.w;
-    const oh = rect.h;
-    const onMoveEv = (ev: PointerEvent) => {
-      const dx = (ev.clientX - startX) / zoom;
-      const dy = (ev.clientY - startY) / zoom;
-      let x = ox;
-      let y = oy;
-      let width = ow;
-      let height = oh;
-      if (handle.includes("e")) width = Math.max(isEntity ? entityTableMinWidth() : MIN_SIZE, ow + dx);
-      if (handle.includes("s")) height = Math.max(isEntity ? entityTableMinHeight(attrs) : MIN_SIZE, oh + dy);
-      if (handle.includes("w")) {
-        width = Math.max(isEntity ? entityTableMinWidth() : MIN_SIZE, ow - dx);
-        x = ox + ow - width;
-      }
-      if (handle.includes("n")) {
-        height = Math.max(isEntity ? entityTableMinHeight(attrs) : MIN_SIZE, oh - dy);
-        y = oy + oh - height;
-      }
-      onResize({ x, y, width, height });
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMoveEv);
-      window.removeEventListener("pointerup", onUp);
-      onGeometryEnd?.();
-    };
-    window.addEventListener("pointermove", onMoveEv);
-    window.addEventListener("pointerup", onUp);
+    beginCanvasResizeGesture({
+      handle,
+      zoom,
+      orig: { x: rect.x, y: rect.y, width: rect.w, height: rect.h },
+      minWidth: minW,
+      minHeight: minH,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      onResize,
+      onEnd: onGeometryEnd,
+    });
   };
 
   const startRotateGlobal = (e: React.PointerEvent) => {
-    const cardEl = e.currentTarget.parentElement as HTMLElement;
-    if (!cardEl) return;
-    const getCenter = () => {
-      const r = cardEl.getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    };
-    const angleAt = (cx: number, cy: number) => {
-      const c = getCenter();
-      return (Math.atan2(cy - c.y, cx - c.x) * 180) / Math.PI;
-    };
-    const startAngle = angleAt(e.clientX, e.clientY);
-    const startRotation = node.rotation ?? 0;
-    const onMoveEv = (ev: PointerEvent) => {
-      const delta = angleAt(ev.clientX, ev.clientY) - startAngle;
-      let next = startRotation + delta;
-      if (ev.shiftKey) next = Math.round(next / ROTATION_SNAP) * ROTATION_SNAP;
-      onRotate(next);
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMoveEv);
-      window.removeEventListener("pointerup", onUp);
-      onGeometryEnd?.();
-    };
-    window.addEventListener("pointermove", onMoveEv);
-    window.addEventListener("pointerup", onUp);
+    const host = e.currentTarget.parentElement as HTMLElement | null;
+    if (!host) return;
+    beginCanvasRotateGesture({
+      getHostElement: () => host,
+      startRotation: node.rotation ?? 0,
+      snapDegrees: ROTATION_SNAP,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      onRotate,
+      onEnd: onGeometryEnd,
+    });
   };
 
   return (
@@ -596,7 +557,7 @@ export function TaskCanvasSymbol({
       </div>
 
       {selected && !multiSelected && !editing
-        ? (Object.keys(HANDLE_POSITIONS) as ResizeHandle[]).map((handle) => (
+        ? (Object.keys(CANVAS_RESIZE_HANDLE_CLASSES) as CanvasResizeHandle[]).map((handle) => (
             <button
               key={handle}
               type="button"
@@ -604,7 +565,7 @@ export function TaskCanvasSymbol({
               className={[
                 "absolute z-20 rounded-sm border border-sky-600 bg-white shadow-sm",
                 coarsePointer ? "h-4 w-4" : "h-2.5 w-2.5",
-                HANDLE_POSITIONS[handle],
+                CANVAS_RESIZE_HANDLE_CLASSES[handle],
               ].join(" ")}
               onPointerDown={(e) => startResize(handle, e)}
             />

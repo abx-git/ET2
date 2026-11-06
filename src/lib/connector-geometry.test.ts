@@ -4,6 +4,9 @@ import {
   diamondEdgePoint,
   ellipseEdgePoint,
   findCardAtWorldPoint,
+  rectAnchorToward,
+  rectCenter,
+  rectEdgePoint,
   relationAnchors,
 } from "@/lib/connector-geometry";
 import type { TaskNode } from "@/types/task-node";
@@ -104,6 +107,18 @@ describe("relationAnchors", () => {
     expect(start.y).toBeCloseTo(40, 0);
     expect(end.x).toBeCloseTo(300, 0);
     expect(end.y).toBeCloseTo(40, 0);
+  });
+});
+
+describe("rectAnchorToward", () => {
+  it("matches rectEdgePoint from center", () => {
+    const rect = { x: 10, y: 20, w: 100, h: 80 };
+    const toward = { x: 200, y: 60 };
+    const center = rectCenter(rect);
+    const a = rectAnchorToward(rect, toward);
+    const b = rectEdgePoint(rect, center, toward);
+    expect(a.x).toBeCloseTo(b.x);
+    expect(a.y).toBeCloseTo(b.y);
   });
 });
 
